@@ -1,13 +1,13 @@
 {
   "name": "glassware",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:extension": "npm run build && node scripts/package-extension.mjs",
-    "store:assets": "npm run build && node scripts/generate-store-assets.mjs",
+    "store:assets": "npm run build && node scripts/generate-store-assets.mjs && node scripts/generate-promo-assets.mjs",
     "verify:extension": "node scripts/verify-extension-package.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:extension": "node scripts/smoke-extension.mjs",
@@ -18,6 +18,7 @@
   "dependencies": {
     "konva": "^10.0.0",
     "lucide-react": "^0.544.0",
+    "pica": "^10.0.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

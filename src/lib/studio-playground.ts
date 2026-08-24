@@ -1,6 +1,7 @@
 import {
   CANVAS_PRESETS,
   DEFAULT_IMAGE_ADJUSTMENTS,
+  DEFAULT_IMAGE_WARP,
   cloneImageMask,
   cloneImagePresentation,
   commitSnapshot,
@@ -28,6 +29,7 @@ export function createStudioPlaygroundProject(
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
       presentation: cloneImagePresentation(),
       mask: cloneImageMask(),
+      warp: { ...DEFAULT_IMAGE_WARP },
       x: 110,
       y: 255,
       width: 860,

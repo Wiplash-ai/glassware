@@ -74,6 +74,8 @@
         "rotation": { "type": "number" },
         "scaleX": { "type": "number" },
         "scaleY": { "type": "number" },
+        "skewX": { "type": "number", "minimum": -60, "maximum": 60 },
+        "skewY": { "type": "number", "minimum": -60, "maximum": 60 },
         "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
         "visible": { "type": "boolean" },
         "locked": { "type": "boolean" },
@@ -86,6 +88,32 @@
         "fontStyle": { "type": "string", "minLength": 1, "maxLength": 80 },
         "align": { "enum": ["left", "center", "right"] },
         "lineHeight": { "type": "number", "exclusiveMinimum": 0 },
+        "fontWeight": { "type": "number", "minimum": 100, "maximum": 900 },
+        "letterSpacing": { "type": "number", "minimum": -20, "maximum": 100 },
+        "textDecoration": { "enum": ["none", "underline", "line-through"] },
+        "textTransform": { "enum": ["none", "uppercase", "lowercase"] },
+        "stroke": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "strokeWidth": { "type": "number", "minimum": 0, "maximum": 40 },
+        "gradient": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "start", "end", "angle"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "start": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "end": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "angle": { "type": "number", "minimum": -360, "maximum": 360 }
+          }
+        },
+        "curve": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "amount"],
+          "properties": {
+            "mode": { "enum": ["none", "arc-up", "arc-down"] },
+            "amount": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
         "shadow": {
           "type": "object",
           "additionalProperties": false,
@@ -105,7 +133,8 @@
         "crop": { "$ref": "#/$defs/crop" },
         "adjustments": { "$ref": "#/$defs/imageAdjustments" },
         "presentation": { "$ref": "#/$defs/imagePresentation" },
-        "mask": { "$ref": "#/$defs/imageMask" }
+        "mask": { "$ref": "#/$defs/imageMask" },
+        "warp": { "$ref": "#/$defs/imageWarp" }
       },
       "allOf": [
         {
@@ -139,8 +168,18 @@
       "required": ["brightness", "contrast", "saturation", "temperature", "tint", "sharpen", "vignette", "blur", "grayscale", "sepia"],
       "properties": {
         "brightness": { "type": "number", "minimum": -1, "maximum": 1 },
+        "exposure": { "type": "number", "minimum": -2, "maximum": 2 },
         "contrast": { "type": "number", "minimum": -100, "maximum": 100 },
         "saturation": { "type": "number", "minimum": -2, "maximum": 2 },
+        "vibrance": { "type": "number", "minimum": -1, "maximum": 1 },
+        "hue": { "type": "number", "minimum": -180, "maximum": 180 },
+        "highlights": { "type": "number", "minimum": -1, "maximum": 1 },
+        "shadows": { "type": "number", "minimum": -1, "maximum": 1 },
+        "fade": { "type": "number", "minimum": 0, "maximum": 1 },
+        "levelsBlack": { "type": "number", "minimum": 0, "maximum": 254 },
+        "levelsWhite": { "type": "number", "minimum": 1, "maximum": 255 },
+        "levelsGamma": { "type": "number", "minimum": 0.1, "maximum": 3 },
+        "curve": { "enum": ["linear", "soft-contrast", "strong-contrast", "matte", "soft-highlights"] },
         "temperature": { "type": "number", "minimum": -1, "maximum": 1 },
         "tint": { "type": "number", "minimum": -1, "maximum": 1 },
         "sharpen": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -148,6 +187,17 @@
         "blur": { "type": "number", "minimum": 0, "maximum": 40 },
         "grayscale": { "type": "boolean" },
         "sepia": { "type": "boolean" }
+      }
+    },
+    "imageWarp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "amount", "perspectiveX", "perspectiveY"],
+      "properties": {
+        "mode": { "enum": ["none", "perspective", "bulge", "pinch", "wave"] },
+        "amount": { "type": "number", "minimum": 0, "maximum": 1 },
+        "perspectiveX": { "type": "number", "minimum": -1, "maximum": 1 },
+        "perspectiveY": { "type": "number", "minimum": -1, "maximum": 1 }
       }
     },
     "imageMask": {

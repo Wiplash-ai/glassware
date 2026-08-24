@@ -6,6 +6,7 @@ import { Image } from "konva/lib/shapes/Image";
 import { Line } from "konva/lib/shapes/Line";
 import { Rect } from "konva/lib/shapes/Rect";
 import { Text } from "konva/lib/shapes/Text";
+import { TextPath } from "konva/lib/shapes/TextPath";
 import { Transformer } from "konva/lib/shapes/Transformer";
 import { Blur } from "konva/lib/filters/Blur";
 import { Brighten } from "konva/lib/filters/Brighten";
@@ -27,6 +28,7 @@ export default Konva.Util._assign(Konva, {
   Line,
   Rect,
   Text,
+  TextPath,
   Transformer,
   Filters: {
     Blur,

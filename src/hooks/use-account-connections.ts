@@ -120,6 +120,10 @@ export function useAccountConnections(): AccountConnectionsModel {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [deviceAuthorization, setDeviceAuthorization] = useState<AiDeviceAuthorization | null>(null);
+  const [pendingCheckout, setPendingCheckout] = useState<{
+    plan: Exclude<BillingPlan, "creator">;
+    startedAt: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -420,17 +424,93 @@ export function useAccountConnections(): AccountConnectionsModel {
     if (billing) setSnapshot((current) => ({ ...current, billing }));
   }, [run, serviceClient, snapshot.account?.mode]);
 
+  useEffect(() => {
+    if (!extensionSurface || !serviceClient || snapshot.account?.mode !== "authenticated") return;
+    let refreshing = false;
+    const refresh = () => {
+      if (refreshing || document.visibilityState === "hidden") return;
+      refreshing = true;
+      void serviceClient.getBilling()
+        .then((billing) => setSnapshot((current) => ({ ...current, billing })))
+        .catch(() => undefined)
+        .finally(() => { refreshing = false; });
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [extensionSurface, serviceClient, snapshot.account?.id, snapshot.account?.mode]);
+
+  useEffect(() => {
+    if (!pendingCheckout || !serviceClient || snapshot.account?.mode !== "authenticated") return;
+    let cancelled = false;
+    let polling = false;
+    let timer = 0;
+    const poll = async () => {
+      if (cancelled || polling) return;
+      polling = true;
+      try {
+        const billing = await serviceClient.getBilling();
+        if (cancelled) return;
+        setSnapshot((current) => ({ ...current, billing }));
+        if (billing.plan === pendingCheckout.plan && billing.cloudAccess === "read_write") {
+          setPendingCheckout(null);
+          setNotice(`${billing.planName} is active in Glassware. Cloud entitlement is ready here and in the web app.`);
+          return;
+        }
+      } catch {
+        // Checkout can outlive a transient network failure; the next poll retries.
+      } finally {
+        polling = false;
+      }
+      if (Date.now() - pendingCheckout.startedAt < 10 * 60_000) {
+        timer = window.setTimeout(poll, 3_000);
+      } else {
+        setPendingCheckout(null);
+        setNotice("Checkout status will refresh when you return to Glassware.");
+      }
+    };
+    timer = window.setTimeout(poll, 1_500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [pendingCheckout, serviceClient, snapshot.account?.id, snapshot.account?.mode]);
+
   const startCheckout = useCallback(async (plan: Exclude<BillingPlan, "creator">, interval: BillingInterval) => {
     if (!serviceClient || snapshot.account?.mode !== "authenticated") {
       setError("Sign in before upgrading your GlassWare plan.");
       return false;
     }
+    if (extensionSurface && serviceClient.requestExtensionBillingConsent) {
+      const consented = await run("billing-consent", () => serviceClient.requestExtensionBillingConsent!());
+      if (!consented) {
+        setError("Allow the optional payment-information disclosure before opening Stripe checkout.");
+        return false;
+      }
+    }
     const idempotencyKey = `checkout-${crypto.randomUUID()}`;
     const redirect = await run("billing-checkout", () => serviceClient.createBillingCheckout(plan, interval, idempotencyKey));
     if (!redirect) return false;
+    if (extensionSurface) {
+      if (!serviceClient.openExtensionBillingPage) {
+        setError("This browser cannot open the secure Stripe checkout page.");
+        return false;
+      }
+      const opened = await run("billing-open", async () => {
+        await serviceClient.openExtensionBillingPage!(redirect.url, "checkout");
+        return true;
+      });
+      if (!opened) return false;
+      setPendingCheckout({ plan, startedAt: Date.now() });
+      setNotice("Stripe checkout opened in a separate tab. Glassware will update this plan automatically after payment.");
+      return true;
+    }
     window.location.assign(redirect.url);
     return true;
-  }, [run, serviceClient, snapshot.account?.mode]);
+  }, [extensionSurface, run, serviceClient, snapshot.account?.mode]);
 
   const openBillingPortal = useCallback(async () => {
     if (!serviceClient || snapshot.account?.mode !== "authenticated") {
@@ -440,9 +520,22 @@ export function useAccountConnections(): AccountConnectionsModel {
     const idempotencyKey = `portal-${crypto.randomUUID()}`;
     const redirect = await run("billing-portal", () => serviceClient.createBillingPortal(idempotencyKey));
     if (!redirect) return false;
+    if (extensionSurface) {
+      if (!serviceClient.openExtensionBillingPage) {
+        setError("This browser cannot open the secure Stripe billing page.");
+        return false;
+      }
+      const opened = await run("billing-open", async () => {
+        await serviceClient.openExtensionBillingPage!(redirect.url, "portal");
+        return true;
+      });
+      if (!opened) return false;
+      setNotice("Stripe billing settings opened in a separate tab. Glassware refreshes when you return.");
+      return true;
+    }
     window.location.assign(redirect.url);
     return true;
-  }, [run, serviceClient, snapshot.account?.mode]);
+  }, [extensionSurface, run, serviceClient, snapshot.account?.mode]);
 
   const requireCloudAiHistory = useCallback(() => {
     if (!serviceClient || snapshot.account?.mode !== "authenticated") {

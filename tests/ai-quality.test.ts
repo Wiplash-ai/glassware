@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assessAiQuality } from "../src/lib/ai-quality";
-import { addProjectPage, createProject } from "../src/lib/model";
+import { DEFAULT_IMAGE_ADJUSTMENTS, addProjectPage, createProject } from "../src/lib/model";
 import { createTemplateSnapshot } from "../src/lib/templates";
 
 describe("AI quality checks", () => {
@@ -15,7 +15,7 @@ describe("AI quality checks", () => {
       name: "Tiny source",
       assetId: "asset-1",
       crop: { x: 0, y: 0, width: 1, height: 1 },
-      adjustments: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, sharpen: 0, vignette: 0, blur: 0, grayscale: false, sepia: false },
+      adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
       presentation: { cornerRadius: 0, frame: { type: "none" as const, width: 0, color: "#111111", opacity: 1, padding: 0, title: "" }, shadow: { enabled: false, color: "#111111", blur: 0, offsetX: 0, offsetY: 0, opacity: 0 } },
       mask: { enabled: false, inverted: false, feather: 0, strokes: [] },
       width: 800,

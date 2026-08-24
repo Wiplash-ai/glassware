@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "GlassWare",
-  "version": "1.0.0",
-  "description": "Capture images and pages into a private, local-first creative workbench.",
+  "name": "Glassware Image Editor",
+  "short_name": "Glassware",
+  "version": "1.0.1",
+  "description": "Capture, crop, resize, retouch, layer, and export images in a private, local-first editor.",
   "homepage_url": "https://labs.wiplash.ai/glassware",
   "icons": {
     "16": "icons/icon-16.png",
@@ -24,7 +25,7 @@
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "action": {
-    "default_title": "Open GlassWare",
+    "default_title": "Open Glassware Image Editor",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"

@@ -10,7 +10,7 @@ GlassWare uses only MIT-licensed editor foundations selected during the
 | miniPaint | Photo-tool implementation reference | MIT |
 | Filerobot Image Editor | Photo-editing UX reference | MIT |
 | Cropper.js | Candidate focused crop module | MIT |
-| pica | Candidate browser resize module | MIT |
+| pica | Adopted high-quality browser resize module, loaded on demand | MIT |
 | Filerobot's Konva architecture | Editor integration reference | MIT |
 | Openverse API | Openly licensed image search adapter | MIT service code; indexed media retains its own license |
 

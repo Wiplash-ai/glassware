@@ -1,6 +1,9 @@
 import {
   canRedo,
   cloneImageMask,
+  cloneImageWarp,
+  cloneTextCurve,
+  cloneTextGradient,
   commitSnapshot,
   currentRevisionIndex,
   redoProject,
@@ -52,8 +55,11 @@ function cloneNode(object: DesignNode): DesignNode {
           shadow: { ...object.presentation.shadow },
         },
         mask: cloneImageMask(object.mask),
+        warp: cloneImageWarp(object.warp),
       }
-    : { ...object, ...(object.shadow ? { shadow: { ...object.shadow } } : {}) };
+    : object.kind === "text"
+      ? { ...object, gradient: cloneTextGradient(object.gradient), curve: cloneTextCurve(object.curve), ...(object.shadow ? { shadow: { ...object.shadow } } : {}) }
+      : { ...object, ...(object.shadow ? { shadow: { ...object.shadow } } : {}) };
 }
 
 function cloneDocumentState(state: ProjectDocumentState): ProjectDocumentState {

@@ -34,7 +34,17 @@ export interface AiEditedAssetSource {
   createdAt: string;
 }
 
-export type AssetSource = OpenverseAssetSource | AiEditedAssetSource;
+export interface ResampledAssetSource {
+  provider: "glassware-resample";
+  parentAssetId: string;
+  originalWidth: number;
+  originalHeight: number;
+  width: number;
+  height: number;
+  createdAt: string;
+}
+
+export type AssetSource = OpenverseAssetSource | AiEditedAssetSource | ResampledAssetSource;
 
 export interface StoredAsset {
   id: string;

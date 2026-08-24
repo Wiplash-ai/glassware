@@ -35,6 +35,8 @@ export interface BaseDesignNode {
   rotation: number;
   scaleX: number;
   scaleY: number;
+  skewX?: number;
+  skewY?: number;
   opacity: number;
   visible: boolean;
   locked: boolean;
@@ -54,7 +56,27 @@ export interface TextDesignNode extends BaseDesignNode {
   fontStyle: string;
   align: "left" | "center" | "right";
   lineHeight: number;
+  fontWeight?: number;
+  letterSpacing?: number;
+  textDecoration?: "none" | "underline" | "line-through";
+  textTransform?: "none" | "uppercase" | "lowercase";
+  stroke?: string;
+  strokeWidth?: number;
+  gradient?: TextGradient;
+  curve?: TextCurve;
   shadow?: ImageShadow;
+}
+
+export interface TextGradient {
+  enabled: boolean;
+  start: string;
+  end: string;
+  angle: number;
+}
+
+export interface TextCurve {
+  mode: "none" | "arc-up" | "arc-down";
+  amount: number;
 }
 
 export const SHAPE_KINDS = [
@@ -92,6 +114,18 @@ export interface ImageDesignNode extends BaseDesignNode {
   adjustments: ImageAdjustments;
   presentation: ImagePresentation;
   mask: ImageMask;
+  /** Normalized on load; optional here so pre-Photo-Lab project objects remain source compatible. */
+  warp?: ImageWarp;
+}
+
+export const IMAGE_WARP_MODES = ["none", "perspective", "bulge", "pinch", "wave"] as const;
+export type ImageWarpMode = (typeof IMAGE_WARP_MODES)[number];
+
+export interface ImageWarp {
+  mode: ImageWarpMode;
+  amount: number;
+  perspectiveX: number;
+  perspectiveY: number;
 }
 
 export interface ImageMaskStroke {
@@ -117,8 +151,18 @@ export interface NormalizedCrop {
 
 export interface ImageAdjustments {
   brightness: number;
+  exposure: number;
   contrast: number;
   saturation: number;
+  vibrance: number;
+  hue: number;
+  highlights: number;
+  shadows: number;
+  fade: number;
+  levelsBlack: number;
+  levelsWhite: number;
+  levelsGamma: number;
+  curve: "linear" | "soft-contrast" | "strong-contrast" | "matte" | "soft-highlights";
   temperature: number;
   tint: number;
   sharpen: number;
@@ -245,8 +289,18 @@ const DEFAULT_BACKGROUND = "#ffffff";
 export const FULL_IMAGE_CROP: NormalizedCrop = { x: 0, y: 0, width: 1, height: 1 };
 export const DEFAULT_IMAGE_ADJUSTMENTS: ImageAdjustments = {
   brightness: 0,
+  exposure: 0,
   contrast: 0,
   saturation: 0,
+  vibrance: 0,
+  hue: 0,
+  highlights: 0,
+  shadows: 0,
+  fade: 0,
+  levelsBlack: 0,
+  levelsWhite: 255,
+  levelsGamma: 1,
+  curve: "linear",
   temperature: 0,
   tint: 0,
   sharpen: 0,
@@ -254,6 +308,12 @@ export const DEFAULT_IMAGE_ADJUSTMENTS: ImageAdjustments = {
   blur: 0,
   grayscale: false,
   sepia: false,
+};
+export const DEFAULT_IMAGE_WARP: ImageWarp = {
+  mode: "none",
+  amount: 0,
+  perspectiveX: 0,
+  perspectiveY: 0,
 };
 export const DEFAULT_IMAGE_MASK: ImageMask = {
   enabled: false,
@@ -343,6 +403,18 @@ export function cloneImageMask(mask: ImageMask = DEFAULT_IMAGE_MASK): ImageMask 
   };
 }
 
+export function cloneImageWarp(warp: ImageWarp = DEFAULT_IMAGE_WARP): ImageWarp {
+  return { ...warp };
+}
+
+export function cloneTextGradient(gradient?: TextGradient): TextGradient {
+  return { enabled: false, start: "#111111", end: "#666666", angle: 0, ...gradient };
+}
+
+export function cloneTextCurve(curve?: TextCurve): TextCurve {
+  return { mode: "none", amount: 0.5, ...curve };
+}
+
 export function cloneArtworkPresentation(
   presentation: ArtworkPresentation = DEFAULT_ARTWORK_PRESENTATION,
 ): ArtworkPresentation {
@@ -392,8 +464,16 @@ function cloneSnapshot(snapshot: ProjectSnapshot): ProjectSnapshot {
           adjustments: { ...object.adjustments },
           presentation: cloneImagePresentation(object.presentation),
           mask: cloneImageMask(object.mask),
+          warp: cloneImageWarp(object.warp),
         }
-      : { ...object, shadow: cloneObjectShadow(object.shadow) }),
+      : object.kind === "text"
+        ? {
+            ...object,
+            ...(object.gradient ? { gradient: cloneTextGradient(object.gradient) } : {}),
+            ...(object.curve ? { curve: cloneTextCurve(object.curve) } : {}),
+            shadow: cloneObjectShadow(object.shadow),
+          }
+        : { ...object, shadow: cloneObjectShadow(object.shadow) }),
   };
 }
 
@@ -793,6 +873,8 @@ function normalizeDesignNode(value: unknown): DesignNode | null {
     rotation: node.rotation,
     scaleX: node.scaleX,
     scaleY: node.scaleY,
+    skewX: finiteNumber(node.skewX, -60, 60) ? node.skewX : 0,
+    skewY: finiteNumber(node.skewY, -60, 60) ? node.skewY : 0,
     opacity: node.opacity,
     visible: node.visible,
     locked: node.locked,
@@ -806,7 +888,36 @@ function normalizeDesignNode(value: unknown): DesignNode | null {
       !finiteNumber(node.fontSize, Number.EPSILON) || typeof node.fontStyle !== "string" || !node.fontStyle ||
       !["left", "center", "right"].includes(String(node.align)) || !finiteNumber(node.lineHeight, Number.EPSILON)
     ) return null;
-    return { ...common, kind: "text", text: node.text, fill: node.fill, fontFamily: node.fontFamily, fontSize: node.fontSize, fontStyle: node.fontStyle, align: node.align as TextDesignNode["align"], lineHeight: node.lineHeight, shadow: normalizeObjectShadow(node.shadow) };
+    const gradientValue = node.gradient as Partial<TextGradient> | undefined;
+    const curveValue = node.curve as Partial<TextCurve> | undefined;
+    return {
+      ...common,
+      kind: "text",
+      text: node.text,
+      fill: node.fill,
+      fontFamily: node.fontFamily,
+      fontSize: node.fontSize,
+      fontStyle: node.fontStyle,
+      align: node.align as TextDesignNode["align"],
+      lineHeight: node.lineHeight,
+      fontWeight: finiteNumber(node.fontWeight, 100, 900) ? node.fontWeight : node.fontStyle.includes("bold") ? 700 : 400,
+      letterSpacing: finiteNumber(node.letterSpacing, -20, 100) ? node.letterSpacing : 0,
+      textDecoration: ["none", "underline", "line-through"].includes(String(node.textDecoration)) ? node.textDecoration as TextDesignNode["textDecoration"] : "none",
+      textTransform: ["none", "uppercase", "lowercase"].includes(String(node.textTransform)) ? node.textTransform as TextDesignNode["textTransform"] : "none",
+      stroke: typeof node.stroke === "string" && node.stroke ? node.stroke : "#111111",
+      strokeWidth: finiteNumber(node.strokeWidth, 0, 40) ? node.strokeWidth : 0,
+      gradient: {
+        enabled: typeof gradientValue?.enabled === "boolean" ? gradientValue.enabled : false,
+        start: typeof gradientValue?.start === "string" && gradientValue.start ? gradientValue.start : node.fill,
+        end: typeof gradientValue?.end === "string" && gradientValue.end ? gradientValue.end : "#666666",
+        angle: finiteNumber(gradientValue?.angle, -360, 360) ? gradientValue.angle : 0,
+      },
+      curve: {
+        mode: ["none", "arc-up", "arc-down"].includes(String(curveValue?.mode)) ? curveValue!.mode as TextCurve["mode"] : "none",
+        amount: finiteNumber(curveValue?.amount, 0, 1) ? curveValue.amount : 0.5,
+      },
+      shadow: normalizeObjectShadow(node.shadow),
+    };
   }
   if (node.kind === "shape") {
     if (!SHAPE_KINDS.includes(node.shape as ShapeKind) || typeof node.fill !== "string" || !node.fill || !finiteNumber(node.cornerRadius, 0)) return null;
@@ -830,8 +941,20 @@ function normalizeDesignNode(value: unknown): DesignNode | null {
       typeof adjustmentValue.grayscale === "boolean" && typeof adjustmentValue.sepia === "boolean"
       ? {
           brightness: adjustmentValue.brightness,
+          exposure: finiteNumber(adjustmentValue.exposure, -2, 2) ? adjustmentValue.exposure : 0,
           contrast: adjustmentValue.contrast,
           saturation: adjustmentValue.saturation,
+          vibrance: finiteNumber(adjustmentValue.vibrance, -1, 1) ? adjustmentValue.vibrance : 0,
+          hue: finiteNumber(adjustmentValue.hue, -180, 180) ? adjustmentValue.hue : 0,
+          highlights: finiteNumber(adjustmentValue.highlights, -1, 1) ? adjustmentValue.highlights : 0,
+          shadows: finiteNumber(adjustmentValue.shadows, -1, 1) ? adjustmentValue.shadows : 0,
+          fade: finiteNumber(adjustmentValue.fade, 0, 1) ? adjustmentValue.fade : 0,
+          levelsBlack: finiteNumber(adjustmentValue.levelsBlack, 0, 254) ? adjustmentValue.levelsBlack : 0,
+          levelsWhite: finiteNumber(adjustmentValue.levelsWhite, 1, 255) ? adjustmentValue.levelsWhite : 255,
+          levelsGamma: finiteNumber(adjustmentValue.levelsGamma, 0.1, 3) ? adjustmentValue.levelsGamma : 1,
+          curve: ["linear", "soft-contrast", "strong-contrast", "matte", "soft-highlights"].includes(String(adjustmentValue.curve))
+            ? adjustmentValue.curve as ImageAdjustments["curve"]
+            : "linear",
           temperature: finiteNumber(adjustmentValue.temperature, -1, 1) ? adjustmentValue.temperature : 0,
           tint: finiteNumber(adjustmentValue.tint, -1, 1) ? adjustmentValue.tint : 0,
           sharpen: finiteNumber(adjustmentValue.sharpen, 0, 1) ? adjustmentValue.sharpen : 0,
@@ -842,6 +965,13 @@ function normalizeDesignNode(value: unknown): DesignNode | null {
         }
       : { ...DEFAULT_IMAGE_ADJUSTMENTS };
     const presentation = normalizeImagePresentation(node.presentation);
+    const warpValue = node.warp as Partial<ImageWarp> | undefined;
+    const warp: ImageWarp = {
+      mode: IMAGE_WARP_MODES.includes(warpValue?.mode as ImageWarpMode) ? warpValue!.mode as ImageWarpMode : "none",
+      amount: finiteNumber(warpValue?.amount, 0, 1) ? warpValue.amount : 0,
+      perspectiveX: finiteNumber(warpValue?.perspectiveX, -1, 1) ? warpValue.perspectiveX : 0,
+      perspectiveY: finiteNumber(warpValue?.perspectiveY, -1, 1) ? warpValue.perspectiveY : 0,
+    };
     const maskValue = node.mask as Partial<ImageMask> | undefined;
     const mask: ImageMask = maskValue && Array.isArray(maskValue.strokes)
       ? {
@@ -858,7 +988,7 @@ function normalizeDesignNode(value: unknown): DesignNode | null {
           }),
         }
       : cloneImageMask();
-    return { ...common, kind: "image", assetId: node.assetId, crop, adjustments, presentation, mask };
+    return { ...common, kind: "image", assetId: node.assetId, crop, adjustments, presentation, mask, warp };
   }
   return null;
 }

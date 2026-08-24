@@ -359,6 +359,8 @@ export interface AccountConnectionsClient {
   getBilling(): Promise<BillingSnapshot>;
   createBillingCheckout(plan: Exclude<BillingPlan, "creator">, interval: BillingInterval, idempotencyKey: string): Promise<BillingRedirect>;
   createBillingPortal(idempotencyKey: string): Promise<BillingRedirect>;
+  requestExtensionBillingConsent?(): Promise<boolean>;
+  openExtensionBillingPage?(url: string, purpose: "checkout" | "portal"): Promise<void>;
 }
 
 export interface StorageLike {
@@ -378,8 +380,8 @@ export interface ExtensionChromeLike {
     launchWebAuthFlow(details: { url: string; interactive: boolean }): Promise<string>;
   };
   permissions: {
-    contains(permissions: { origins: string[] }): Promise<boolean>;
-    request(permissions: { origins: string[] }): Promise<boolean>;
+    contains(permissions: { origins?: string[]; data_collection?: string[] }): Promise<boolean>;
+    request(permissions: { origins?: string[]; data_collection?: string[] }): Promise<boolean>;
   };
   storage: {
     local: {
@@ -387,6 +389,9 @@ export interface ExtensionChromeLike {
       set(items: Record<string, unknown>): Promise<void>;
       remove(key: string): Promise<void>;
     };
+  };
+  runtime?: {
+    sendMessage(message: unknown): Promise<unknown>;
   };
 }
 
@@ -1167,14 +1172,30 @@ export function createExtensionAccountServiceClient(options: ExtensionClientOpti
       throw new Error("GlassWare extension sign-in must use the browser-owned Wiplash authorization window.");
     },
     async startExtensionSignIn() {
-      const hasPermission = await browser.permissions.contains({ origins: [permissionOrigin] });
-      if (!hasPermission && !await browser.permissions.request({ origins: [permissionOrigin] })) {
-        throw new Error("Allow access to auth.wiplash.ai so GlassWare can securely sign you in.");
-      }
       const redirectUri = browser.identity.getRedirectURL();
       const redirect = new URL(redirectUri);
-      if (redirect.protocol !== "https:" || !redirect.hostname.endsWith(".chromiumapp.org") || redirect.pathname !== "/") {
+      const chromiumRedirect = redirect.hostname.endsWith(".chromiumapp.org");
+      const firefoxRedirect = redirect.hostname.endsWith(".extensions.allizom.org");
+      if (redirect.protocol !== "https:" || (!chromiumRedirect && !firefoxRedirect) || redirect.pathname !== "/"
+        || redirect.username || redirect.password || redirect.search || redirect.hash) {
         throw new Error("This browser returned an unsafe GlassWare sign-in callback.");
+      }
+      const requestedPermissions = firefoxRedirect
+        ? {
+            origins: [permissionOrigin],
+            data_collection: [
+              "authenticationInfo",
+              "personallyIdentifyingInfo",
+              "financialAndPaymentInfo",
+              "personalCommunications",
+              "browsingActivity",
+              "websiteContent",
+            ],
+          }
+        : { origins: [permissionOrigin] };
+      const hasPermission = await browser.permissions.contains(requestedPermissions);
+      if (!hasPermission && !await browser.permissions.request(requestedPermissions)) {
+        throw new Error("Allow the disclosed account access so GlassWare can securely sign you in.");
       }
       const state = randomBase64Url(32);
       const codeVerifier = randomBase64Url(64);
@@ -1211,6 +1232,26 @@ export function createExtensionAccountServiceClient(options: ExtensionClientOpti
       if (!snapshot.account || snapshot.account.mode !== "authenticated") throw new Error("Account service did not return a signed-in GlassWare account.");
       await browser.storage.local.set({ [ACCOUNT_EXTENSION_STORAGE_KEY]: credential });
       return snapshot;
+    },
+    async requestExtensionBillingConsent() {
+      const redirect = new URL(browser.identity.getRedirectURL());
+      if (!redirect.hostname.endsWith(".extensions.allizom.org")) return true;
+      const requestedPermissions = { data_collection: ["financialAndPaymentInfo"] };
+      if (await browser.permissions.contains(requestedPermissions)) return true;
+      return browser.permissions.request(requestedPermissions);
+    },
+    async openExtensionBillingPage(url, purpose) {
+      const expectedHost = purpose === "checkout" ? "checkout.stripe.com" : "billing.stripe.com";
+      const redirect = parseBillingRedirect({ status: "redirect", url }, expectedHost);
+      if (!browser.runtime) throw new Error("This browser cannot open the secure billing page.");
+      const receipt = await browser.runtime.sendMessage({
+        type: "glassware.open-billing-page",
+        purpose,
+        url: redirect.url,
+      });
+      if (!isRecord(receipt) || receipt.ok !== true) {
+        throw new Error("The secure billing page could not be opened.");
+      }
     },
     async signOut() {
       try {

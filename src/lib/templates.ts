@@ -1,7 +1,10 @@
 import {
   CANVAS_PRESETS,
   cloneArtworkPresentation,
+  cloneImageWarp,
   cloneObjectShadow,
+  cloneTextCurve,
+  cloneTextGradient,
   commitSnapshot,
   newId,
   type CanvasSettings,
@@ -101,7 +104,21 @@ export function createTemplateSnapshot(templateId: string): { canvas: CanvasSett
   if (!template) return null;
   return {
     canvas: { ...template.canvas, presentation: cloneArtworkPresentation(template.canvas.presentation), guides: [], snapping: { ...template.canvas.snapping } },
-    objects: template.objects.map((object) => ({ ...object, id: newId(), ...(object.kind === "image" ? { crop: { ...object.crop }, adjustments: { ...object.adjustments }, presentation: { ...object.presentation, frame: { ...object.presentation.frame }, shadow: { ...object.presentation.shadow } }, mask: { ...object.mask, strokes: object.mask.strokes.map((stroke) => ({ ...stroke, points: [...stroke.points] })) } } : { shadow: object.shadow ? { ...object.shadow } : undefined }) })),
+    objects: template.objects.map((object) => ({
+      ...object,
+      id: newId(),
+      ...(object.kind === "image"
+        ? {
+            crop: { ...object.crop },
+            adjustments: { ...object.adjustments },
+            presentation: { ...object.presentation, frame: { ...object.presentation.frame }, shadow: { ...object.presentation.shadow } },
+            mask: { ...object.mask, strokes: object.mask.strokes.map((stroke) => ({ ...stroke, points: [...stroke.points] })) },
+            warp: cloneImageWarp(object.warp),
+          }
+        : object.kind === "text"
+          ? { gradient: cloneTextGradient(object.gradient), curve: cloneTextCurve(object.curve), shadow: object.shadow ? { ...object.shadow } : undefined }
+          : { shadow: object.shadow ? { ...object.shadow } : undefined }),
+    })),
   };
 }
 

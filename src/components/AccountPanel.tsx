@@ -86,6 +86,7 @@ export function AccountPanel({
             <p>Sign in only when you want optional sync, a ChatGPT/Codex plugin connection, or an encrypted API-key vault.</p>
           </section>
           <button className="account-sign-in-button" onClick={openSignIn}>Sign in to GlassWare</button>
+          <a className="secondary-wide billing-action" href="./pricing.html">View plans &amp; pricing</a>
         </>
       )}
       {(model.notice || model.error) && (

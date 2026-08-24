@@ -80,6 +80,36 @@ try {
     return { fontSize: style.fontSize, fontFamily: style.fontFamily };
   });
   assert(bodyTypography.fontSize === "16px" && /Inter/.test(bodyTypography.fontFamily), "the packaged editor did not retain GlassWare typography");
+  const pricingUrl = `chrome-extension://${extension.id}/app/pricing.html`;
+  await browserSession.send("Browser.createTab", {
+    url: pricingUrl,
+    browserContextId: initialPage.browserContextId,
+  });
+  const pricing = await waitForPage(context, (page) => page.url() === pricingUrl);
+  await pricing.getByRole("heading", { name: "The editor is free. Cloud is the service." }).waitFor();
+  assert(await pricing.getByRole("link", { name: "Upgrade to Designer" }).getAttribute("href") === "./app.html?subscribe=designer&billing=annual", "the packaged pricing CTA should preserve its subscription intent");
+  await pricing.close();
+
+  const checkoutUrl = "https://checkout.stripe.com/glassware-extension-smoke";
+  await context.route(checkoutUrl, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Stripe Checkout smoke</title><h1>Checkout</h1>" }));
+  const checkoutPagePromise = context.waitForEvent("page");
+  const checkoutResponse = await editor.evaluate((url) => chrome.runtime.sendMessage({
+    type: "glassware.open-billing-page",
+    purpose: "checkout",
+    url,
+  }), checkoutUrl);
+  const checkoutPage = await checkoutPagePromise;
+  await checkoutPage.waitForLoadState("domcontentloaded");
+  assert(checkoutResponse?.ok === true && checkoutPage.url() === checkoutUrl, "the packaged editor should open trusted Stripe checkout in a separate tab");
+  assert(editor.url() === `chrome-extension://${extension.id}/app/app.html`, "billing navigated the packaged editor away from its project");
+  await checkoutPage.close();
+  await context.unroute(checkoutUrl);
+  const unsafeBillingResponse = await editor.evaluate(() => chrome.runtime.sendMessage({
+    type: "glassware.open-billing-page",
+    purpose: "checkout",
+    url: "https://example.com/not-stripe",
+  }));
+  assert(unsafeBillingResponse?.ok === false, "the packaged editor should reject an untrusted billing host");
   await editor.locator(".ai-button").evaluate((button) => button.click());
   await editor.locator(".ai-floating-widget").waitFor();
   assert(editor.url() === `chrome-extension://${extension.id}/app/app.html`, "Ask AI navigated away from the packaged editor");
@@ -112,7 +142,7 @@ try {
   });
   assert(Buffer.from(firstChunk).subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), "the extension export was not a PNG");
 
-  console.log(`GlassWare extension smoke passed in isolated Chromium: ${extension.id}, direct editor open/focus, native app controls, packaged pending-capture import, local restore, and PNG export.`);
+  console.log(`GlassWare extension smoke passed in isolated Chromium: ${extension.id}, direct editor open/focus, packaged pricing and Stripe-tab routing, native app controls, pending-capture import, local restore, and PNG export.`);
 } finally {
   await context?.close();
   await new Promise((resolvePromise) => server.close(resolvePromise));

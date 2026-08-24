@@ -51,6 +51,20 @@
                   "parentAssetId": { "type": "string", "format": "uuid" },
                   "createdAt": { "type": "string", "format": "date-time" }
                 }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["provider", "parentAssetId", "originalWidth", "originalHeight", "width", "height", "createdAt"],
+                "properties": {
+                  "provider": { "const": "glassware-resample" },
+                  "parentAssetId": { "type": "string", "format": "uuid" },
+                  "originalWidth": { "type": "integer", "minimum": 1, "maximum": 16384 },
+                  "originalHeight": { "type": "integer", "minimum": 1, "maximum": 16384 },
+                  "width": { "type": "integer", "minimum": 1, "maximum": 16384 },
+                  "height": { "type": "integer", "minimum": 1, "maximum": 16384 },
+                  "createdAt": { "type": "string", "format": "date-time" }
+                }
               }
             ]
           },

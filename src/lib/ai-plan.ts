@@ -10,7 +10,10 @@ import {
   cloneArtworkPresentation,
   cloneImageMask,
   cloneImagePresentation,
+  cloneImageWarp,
   cloneObjectShadow,
+  cloneTextCurve,
+  cloneTextGradient,
   deleteProjectPage,
   newId,
   renameProjectPage,
@@ -173,8 +176,11 @@ function cloneNode(object: DesignNode): DesignNode {
         adjustments: { ...object.adjustments },
         presentation: cloneImagePresentation(object.presentation),
         mask: cloneImageMask(object.mask),
+        warp: cloneImageWarp(object.warp),
       }
-    : { ...object, shadow: cloneObjectShadow(object.shadow) };
+    : object.kind === "text"
+      ? { ...object, gradient: cloneTextGradient(object.gradient), curve: cloneTextCurve(object.curve), shadow: cloneObjectShadow(object.shadow) }
+      : { ...object, shadow: cloneObjectShadow(object.shadow) };
 }
 
 function activePages(project: GlassWareProject): GlassWareProject["pages"] {

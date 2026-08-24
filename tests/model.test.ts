@@ -12,6 +12,7 @@ import {
   cloneImagePresentation,
   cloneArtworkPresentation,
   DEFAULT_IMAGE_ADJUSTMENTS,
+  DEFAULT_IMAGE_WARP,
   activatePage,
   addProjectPage,
   deleteProjectPage,
@@ -103,6 +104,23 @@ describe("GlassWare project model", () => {
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
       presentation: cloneImagePresentation(),
       mask: { enabled: false, inverted: false, feather: 0, strokes: [] },
+      warp: DEFAULT_IMAGE_WARP,
+    });
+  });
+
+  it("adds advanced typography defaults when recovering older text layers", () => {
+    const project = createProject("Legacy type");
+    const recovered = normalizeProject(project);
+    const text = recovered?.objects.find((object) => object.kind === "text");
+    expect(text).toMatchObject({
+      kind: "text",
+      fontWeight: 700,
+      letterSpacing: 0,
+      textDecoration: "none",
+      textTransform: "none",
+      strokeWidth: 0,
+      gradient: { enabled: false, start: "#111111", end: "#666666", angle: 0 },
+      curve: { mode: "none", amount: 0.5 },
     });
   });
 

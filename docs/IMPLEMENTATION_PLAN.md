@@ -15,6 +15,9 @@ The first design partner is a high-frequency non-technical creator. That means
 the editor must favor recognizable language, generous hit targets, predictable
 undo, strong presets, and fast recovery over exposing graphics-engine jargon.
 
+The V2 Photo Lab, Type Studio, Ideas, and paid editable-reconstruction research
+is maintained in [`V2_PHOTO_TYPE_RESEARCH.md`](./V2_PHOTO_TYPE_RESEARCH.md).
+
 ## Release sequence
 
 ### Phase 0 — foundation (complete)

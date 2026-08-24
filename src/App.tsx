@@ -49,12 +49,16 @@ import {
   RotateCcw,
   RotateCw,
   Save,
+  Scaling,
   Search,
   SendToBack,
   Shapes,
+  SlidersHorizontal,
   Sparkles,
+  Strikethrough,
   Trash2,
   Type,
+  Underline,
   Undo2,
   Ungroup,
   Unlock,
@@ -70,6 +74,7 @@ import {
   DEFAULT_IMAGE_ADJUSTMENTS,
   DEFAULT_IMAGE_MASK,
   DEFAULT_IMAGE_PRESENTATION,
+  DEFAULT_IMAGE_WARP,
   FULL_IMAGE_CROP,
   canRedo,
   canUndo,
@@ -79,6 +84,9 @@ import {
   cloneArtworkPresentation,
   cloneImageMask,
   cloneImagePresentation,
+  cloneImageWarp,
+  cloneTextCurve,
+  cloneTextGradient,
   createProject,
   currentRevisionIndex,
   deleteProjectPage,
@@ -96,9 +104,12 @@ import {
   type ImageDesignNode,
   type ImageMask,
   type ImagePresentation,
+  type ImageWarp,
+  type ImageWarpMode,
   type GlassWareProject,
   type NormalizedCrop,
   type ShapeKind,
+  type TextDesignNode,
 } from "./lib/model";
 import {
   DESIGN_OBJECT_NAME,
@@ -106,9 +117,11 @@ import {
   applyImageEdits,
   applyImagePresentation,
   applyLockedState,
+  applyTextDesignStyle,
   createImageFrameShell,
   designNodeToKonva,
   findDesignNode,
+  isTextCanvasNode,
   serializeLayer,
   updatePresentationFrameShell,
 } from "./lib/canvas";
@@ -202,6 +215,7 @@ import { aiQualityFeedback, assessAiQuality } from "./lib/ai-quality";
 import { buildImagePdf, type PdfImagePage } from "./lib/pdf-export";
 import { renderRegionEditMask, renderRegionEditSource } from "./lib/region-edit";
 import type { RegionEditRequest } from "./components/RegionEditModal";
+import { resampleImageBlob } from "./lib/photo-lab";
 
 const StudioPanel = lazy(() => import("./components/StudioPanel").then((module) => ({ default: module.StudioPanel })));
 const AiConnectionsPanel = lazy(() => import("./components/AiConnectionsPanel").then((module) => ({ default: module.AiConnectionsPanel })));
@@ -251,7 +265,7 @@ type TextPreset = "heading" | "subheading" | "body";
 
 type SaveState = "saving" | "saved" | "error";
 type CloudSaveState = "local" | "syncing" | "synced" | "retrying" | "conflict";
-type ToolName = "Select" | "Images" | "Studio" | "Text" | "Shapes" | "Layers" | "Library" | "Files" | "Account";
+type ToolName = "Select" | "Images" | "Photo" | "Studio" | "Text" | "Shapes" | "Layers" | "Library" | "Files" | "Account";
 type LibraryTab = "templates" | "brand" | "components";
 type LayerDropTarget = { id: string; edge: "before" | "after" };
 
@@ -269,8 +283,10 @@ function cloneComponentObjects(objects: DesignNode[], offset = 0): DesignNode[] 
       : undefined;
     const common = { ...object, id: newId(), x: object.x + offset, y: object.y + offset, ...(groupId ? { groupId } : {}) };
     return object.kind === "image"
-      ? { ...common, crop: { ...object.crop }, adjustments: { ...object.adjustments }, presentation: cloneImagePresentation(object.presentation), mask: cloneImageMask(object.mask) }
-      : { ...common, shadow: object.shadow ? { ...object.shadow } : undefined };
+      ? { ...common, crop: { ...object.crop }, adjustments: { ...object.adjustments }, presentation: cloneImagePresentation(object.presentation), mask: cloneImageMask(object.mask), warp: cloneImageWarp(object.warp) }
+      : object.kind === "text"
+        ? { ...common, gradient: cloneTextGradient(object.gradient), curve: cloneTextCurve(object.curve), shadow: object.shadow ? { ...object.shadow } : undefined }
+        : { ...common, shadow: object.shadow ? { ...object.shadow } : undefined };
   });
 }
 
@@ -433,6 +449,7 @@ function Editor({
   const [selectedAsset, setSelectedAsset] = useState<StoredAsset | null>(null);
   const [selectedAssetSource, setSelectedAssetSource] = useState<AssetSource | null>(null);
   const [cropEditorOpen, setCropEditorOpen] = useState(false);
+  const [resizeEditorOpen, setResizeEditorOpen] = useState(false);
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
   const [regionEditorOpen, setRegionEditorOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -456,6 +473,12 @@ function Editor({
   const viewScale = fitScale * zoom;
   const stageWidth = Math.round(project.canvas.width * viewScale);
   const stageHeight = Math.round(project.canvas.height * viewScale);
+
+  useEffect(() => {
+    if (signInOpen && accountConnections.snapshot.account?.mode === "authenticated") {
+      setSignInOpen(false);
+    }
+  }, [accountConnections.snapshot.account?.mode, signInOpen]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -508,6 +531,7 @@ function Editor({
       setSelectedAsset(null);
       setSelectedAssetSource(null);
       setCropEditorOpen(false);
+      setResizeEditorOpen(false);
       setMaskEditorOpen(false);
       setRegionEditorOpen(false);
       return;
@@ -840,7 +864,7 @@ function Editor({
     const position = node.getAbsolutePosition();
     const scale = node.getAbsoluteScale();
     const textarea = document.createElement("textarea");
-    const original = node.text();
+    const original = String(node.getAttr("designText") ?? node.text());
     let closed = false;
     textarea.className = "inline-text-editor";
     textarea.setAttribute("aria-label", "Edit text on canvas");
@@ -853,7 +877,7 @@ function Editor({
       fontFamily: node.fontFamily(),
       fontSize: `${node.fontSize() * scale.y}px`,
       fontStyle: node.fontStyle().includes("italic") ? "italic" : "normal",
-      fontWeight: node.fontStyle().includes("bold") ? "700" : "400",
+      fontWeight: node.fontStyle().includes("bold") || Number(node.getAttr("textFontWeight") ?? node.fontStyle()) >= 600 ? "700" : "400",
       lineHeight: String(node.lineHeight()),
       color: String(node.fill()),
       textAlign: node.align(),
@@ -875,7 +899,9 @@ function Editor({
       transformer.show();
       inlineEditorCleanupRef.current = null;
       if (commit && nextText !== original) {
-        node.text(nextText);
+        const transform = String(node.getAttr("textTransform") ?? "none");
+        node.setAttr("designText", nextText);
+        node.text(transform === "uppercase" ? nextText.toLocaleUpperCase() : transform === "lowercase" ? nextText.toLocaleLowerCase() : nextText);
         transformer.forceUpdate();
         commitCanvas("Text edited on canvas");
       } else {
@@ -1272,9 +1298,13 @@ function Editor({
       const designNode = target.hasName(DESIGN_OBJECT_NAME)
         ? target
         : target.findAncestor(`.${DESIGN_OBJECT_NAME}`);
-      if (!(designNode instanceof Konva.Text)) return;
-      selectById(String(designNode.getAttr("designId")));
-      beginInlineTextEdit(designNode);
+      if (!isTextCanvasNode(designNode)) return;
+      selectById(String((designNode as Konva.Node).getAttr("designId")));
+      if (designNode instanceof Konva.Text) beginInlineTextEdit(designNode);
+      else {
+        setActiveTool("Text");
+        setMessage("Curved text stays editable in Type Studio. Switch the curve to Straight for on-canvas multiline editing.");
+      }
     });
     stage.on("dragstart", (event) => {
       const target = event.target as Konva.Node;
@@ -1426,6 +1456,7 @@ function Editor({
         adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
         presentation: cloneImagePresentation(),
         mask: { ...DEFAULT_IMAGE_MASK, strokes: [] },
+        warp: { ...DEFAULT_IMAGE_WARP },
         x: (projectRef.current.canvas.width - width) / 2,
         y: (projectRef.current.canvas.height - height) / 2,
         width,
@@ -1668,16 +1699,33 @@ function Editor({
   }
 
   function updateSelectedText(text: string) {
-    if (!(selectedNodeRef.current instanceof Konva.Text)) return;
-    selectedNodeRef.current.text(text);
-    layerRef.current?.draw();
-    commitCanvas("Text edited");
+    updateTextStyleProperty({ text }, "Text edited");
   }
 
-  function updateTextProperty(attributes: Record<string, unknown>, summary: string, commit = true) {
+  function updateTextStyleProperty(patch: Partial<TextDesignNode>, summary: string, commit = true) {
     const node = selectedNodeRef.current;
-    if (!(node instanceof Konva.Text)) return;
-    node.setAttrs(attributes);
+    const targetId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const current = targetId && projectRef.current.objects.find((object): object is TextDesignNode => object.id === targetId && object.kind === "text");
+    if (!current || !isTextCanvasNode(node)) return;
+    const next: TextDesignNode = {
+      ...current,
+      ...patch,
+      gradient: patch.gradient ? { ...cloneTextGradient(current.gradient), ...patch.gradient } : cloneTextGradient(current.gradient),
+      curve: patch.curve ? { ...cloneTextCurve(current.curve), ...patch.curve } : cloneTextCurve(current.curve),
+      shadow: patch.shadow ? { ...current.shadow!, ...patch.shadow } : current.shadow,
+    };
+    const currentCurve = cloneTextCurve(current.curve).mode;
+    const nextCurve = cloneTextCurve(next.curve).mode;
+    const changesNodeType = (currentCurve === "none") !== (nextCurve === "none");
+    if (changesNodeType) {
+      const objects = projectRef.current.objects.map((object) => object.id === next.id ? next : object);
+      const project = commitSnapshot(projectRef.current, summary, { canvas: projectRef.current.canvas, objects });
+      setCurrentProject(project);
+      void renderProject(project, next.id);
+      void persist(project);
+      return;
+    }
+    applyTextDesignStyle(node, next);
     transformerRef.current?.forceUpdate();
     layerRef.current?.batchDraw();
     if (commit) commitCanvas(summary);
@@ -1699,8 +1747,10 @@ function Editor({
       }
       if (font) await registerFont(font);
       const node = layerRef.current && findDesignNode(layerRef.current, targetId);
-      if (!(node instanceof Konva.Text)) return;
-      node.fontFamily(family);
+      if (!isTextCanvasNode(node)) return;
+      const current = projectRef.current.objects.find((object): object is TextDesignNode => object.id === targetId && object.kind === "text");
+      if (!current) return;
+      applyTextDesignStyle(node, { ...current, fontFamily: family });
       transformerRef.current?.forceUpdate();
       layerRef.current?.batchDraw();
       commitCanvas("Typeface changed");
@@ -1735,11 +1785,14 @@ function Editor({
   }
 
   function toggleTextStyle(style: "bold" | "italic") {
-    const node = selectedNodeRef.current;
-    if (!(node instanceof Konva.Text)) return;
-    const active = new Set(node.fontStyle().split(" ").filter((value) => value !== "normal"));
-    active.has(style) ? active.delete(style) : active.add(style);
-    updateTextProperty({ fontStyle: active.size ? [...active].join(" ") : "normal" }, "Typography changed");
+    const targetId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const current = targetId && projectRef.current.objects.find((object): object is TextDesignNode => object.id === targetId && object.kind === "text");
+    if (!current) return;
+    if (style === "bold") {
+      updateTextStyleProperty({ fontWeight: (current.fontWeight ?? (current.fontStyle.includes("bold") ? 700 : 400)) >= 600 ? 400 : 700 }, "Typography changed");
+      return;
+    }
+    updateTextStyleProperty({ fontStyle: current.fontStyle.includes("italic") ? "normal" : "italic" }, "Typography changed");
   }
 
   function changeShapeType(shape: ShapeKind) {
@@ -1781,6 +1834,77 @@ function Editor({
     applyImageEdits(current.node, current.crop, adjustments);
     layerRef.current?.batchDraw();
     if (commit) commitCanvas(summary);
+  }
+
+  function updateImageWarp(patch: Partial<ImageWarp>, summary: string, commit = true) {
+    const targetId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const current = projectRef.current;
+    const target = targetId && current.objects.find((object): object is ImageDesignNode => object.id === targetId && object.kind === "image");
+    if (!target) return;
+    const objects = current.objects.map((object) => object.id === target.id
+      ? { ...target, warp: { ...cloneImageWarp(target.warp), ...patch } }
+      : object);
+    const next = commit
+      ? commitSnapshot(current, summary, { canvas: current.canvas, objects })
+      : { ...current, objects, updatedAt: new Date().toISOString() };
+    setCurrentProject(next);
+    void renderProject(next, target.id);
+    if (commit) void persist(next);
+  }
+
+  function updateImageSkew(axis: "skewX" | "skewY", value: number, commit = false) {
+    updateSelectedLive({ [axis]: Math.tan(value * Math.PI / 180) });
+    if (commit) commitCanvas(`Image ${axis === "skewX" ? "horizontal" : "vertical"} skew changed`);
+  }
+
+  async function resampleSelectedImage(width: number, height: number): Promise<void> {
+    const targetId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const current = projectRef.current;
+    const image = targetId && current.objects.find((object): object is ImageDesignNode => object.id === targetId && object.kind === "image");
+    const asset = image ? await loadAsset(image.assetId) : null;
+    if (!image || !asset) throw new Error("Select an image with an available original before resizing it.");
+
+    try {
+      const normalizedWidth = Math.round(width);
+      const normalizedHeight = Math.round(height);
+      const mimeType = ["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType) ? asset.mimeType : "image/png";
+      const blob = await resampleImageBlob(asset.blob, normalizedWidth, normalizedHeight, mimeType);
+      const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+      const baseName = asset.name.replace(/\.[^.]+$/, "");
+      const file = new File([blob], `${baseName} ${normalizedWidth}x${normalizedHeight}.${extension}`, { type: mimeType });
+      const resized = await createStoredAsset(current.id, file, {
+        provider: "glassware-resample",
+        parentAssetId: asset.id,
+        originalWidth: asset.width,
+        originalHeight: asset.height,
+        width: normalizedWidth,
+        height: normalizedHeight,
+        createdAt: new Date().toISOString(),
+      });
+      await saveAsset(resized);
+      const fitted = fitDisplayBoxToAspect(
+        { x: image.x, y: image.y, width: image.width, height: image.height },
+        normalizedWidth / normalizedHeight,
+      );
+      const objects = current.objects.map((object) => object.id === image.id ? {
+        ...image,
+        ...fitted,
+        assetId: resized.id,
+        crop: { ...FULL_IMAGE_CROP },
+      } : object);
+      const next = commitSnapshot(current, `Image resized to ${normalizedWidth} × ${normalizedHeight}`, {
+        canvas: current.canvas,
+        objects,
+      });
+      setCurrentProject(next);
+      await renderProject(next, image.id);
+      await persist(next);
+      setResizeEditorOpen(false);
+      setMessage(`Created a ${normalizedWidth} × ${normalizedHeight} px source copy. The original is still preserved.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The image could not be resized.");
+      throw error;
+    }
   }
 
   function applyPhotoPreset(preset: PhotoPreset) {
@@ -1982,6 +2106,7 @@ function Editor({
       crop: { ...FULL_IMAGE_CROP },
       adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
       mask: cloneImageMask(DEFAULT_IMAGE_MASK),
+      warp: cloneImageWarp(DEFAULT_IMAGE_WARP),
     };
     let selectedId = image.id;
     const objects = current.objects.map((object) => object.id === image.id && output === "replace"
@@ -2010,21 +2135,27 @@ function Editor({
   }
 
   function resetPhotoEdits() {
-    const current = liveImageState();
-    if (!current) return;
-    const source = current.node.image();
-    if (!source || !("width" in source) || !("height" in source)) return;
+    const targetId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const current = projectRef.current;
+    const image = targetId && current.objects.find((object): object is ImageDesignNode => object.id === targetId && object.kind === "image");
+    if (!image || !selectedAsset) return;
     const box = fitDisplayBoxToAspect(
-      { x: current.node.x(), y: current.node.y(), width: current.node.width(), height: current.node.height() },
-      Number(source.width) / Number(source.height),
+      { x: image.x, y: image.y, width: image.width, height: image.height },
+      selectedAsset.width / selectedAsset.height,
     );
-    current.node.position({ x: box.x, y: box.y });
-    current.node.width(box.width);
-    current.node.height(box.height);
-    applyImageEdits(current.node, FULL_IMAGE_CROP, DEFAULT_IMAGE_ADJUSTMENTS);
-    transformerRef.current?.forceUpdate();
-    layerRef.current?.batchDraw();
-    commitCanvas("Photo edits reset");
+    const objects = current.objects.map((object) => object.id === image.id ? {
+      ...image,
+      ...box,
+      skewX: 0,
+      skewY: 0,
+      crop: { ...FULL_IMAGE_CROP },
+      adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
+      warp: cloneImageWarp(DEFAULT_IMAGE_WARP),
+    } : object);
+    const next = commitSnapshot(current, "Photo edits reset", { canvas: current.canvas, objects });
+    setCurrentProject(next);
+    void renderProject(next, image.id);
+    void persist(next);
   }
 
   async function changeZoom(delta: number | "fit", anchor?: { clientX: number; clientY: number }) {
@@ -2481,6 +2612,7 @@ function Editor({
           crop: { ...FULL_IMAGE_CROP },
           adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
           mask: cloneImageMask(DEFAULT_IMAGE_MASK),
+          warp: cloneImageWarp(DEFAULT_IMAGE_WARP),
           locked: false,
         };
         if (operation.regionOutput === "new-layer") {
@@ -2553,6 +2685,7 @@ function Editor({
         adjustments: { ...DEFAULT_IMAGE_ADJUSTMENTS },
         presentation: cloneImagePresentation(),
         mask: { ...DEFAULT_IMAGE_MASK, strokes: [] },
+        warp: { ...DEFAULT_IMAGE_WARP },
         x: Math.max(0, Math.min(operation.x ?? (application.snapshot.canvas.width - width) / 2, application.snapshot.canvas.width - width)),
         y: Math.max(0, Math.min(operation.y ?? (application.snapshot.canvas.height - height) / 2, application.snapshot.canvas.height - height)),
         width,
@@ -3350,6 +3483,43 @@ function Editor({
     if (activeTool === "Images") {
       return <ImagePanel upload={() => fileInput.current?.click()} addOpenImage={addOpenverseImage} />;
     }
+    if (activeTool === "Photo") {
+      const imageLayers = project.objects.filter((object): object is ImageDesignNode => object.kind === "image");
+      return (
+        <>
+          <div className="panel-heading"><p>PHOTO LAB</p><h1>Edit the image itself</h1></div>
+          {selectedObject?.kind === "image" ? (
+            <>
+              <button className="replace-image-button" onClick={() => replaceImageInput.current?.click()} title="Replace this image while keeping its layout and presentation"><Replace size={15} /><span><strong>Replace source image</strong><small>Keep layout, mask, and presentation</small></span></button>
+              <PhotoInspector
+                image={selectedObject}
+                applyPreset={applyPhotoPreset}
+                updateAdjustments={updateImageAdjustments}
+                updateWarp={updateImageWarp}
+                updateSkew={updateImageSkew}
+                applyCrop={applyCropAspect}
+                openCrop={() => setCropEditorOpen(true)}
+                openResize={() => setResizeEditorOpen(true)}
+                openMask={() => setMaskEditorOpen(true)}
+                openRegionEdit={() => setRegionEditorOpen(true)}
+                rotate={rotateSelectedImage}
+                flip={flipSelectedImage}
+                reset={resetPhotoEdits}
+                source={selectedAssetSource}
+                sourceDimensions={selectedAsset ? { width: selectedAsset.width, height: selectedAsset.height } : null}
+                precisionAvailable={Boolean(selectedAsset)}
+              />
+            </>
+          ) : (
+            <div className="photo-lab-empty">
+              <div><SlidersHorizontal size={24} /><strong>Select an image to develop</strong><p>Photo Lab edits pixels and geometry without flattening the rest of your artwork.</p></div>
+              <button className="upload-card image-upload" onClick={() => fileInput.current?.click()}><Upload size={21} /><span>Upload an image</span><small>PNG, JPG, WebP, or GIF</small></button>
+              {imageLayers.length > 0 && <div className="photo-layer-chooser"><span>Images in this artwork</span>{imageLayers.map((image) => <button key={image.id} onClick={() => selectById(image.id)}><ImagePlus size={15} /><span>{image.name}</span></button>)}</div>}
+            </div>
+          )}
+        </>
+      );
+    }
     if (activeTool === "Studio") {
       return (
         <Suspense fallback={<div className="panel-section hint-card"><strong>Opening Studio…</strong><p>Loading presentation controls.</p></div>}>
@@ -3368,15 +3538,16 @@ function Editor({
     }
     if (activeTool === "Text") {
       return (
-        <>
-          <div className="panel-heading"><p>TYPE TOOL</p><h1>Text</h1></div>
-          <div className="text-preset-list">
-            <button className="text-preset heading" onClick={() => void addText("heading")}><Plus size={17} /><span><strong>Add a heading</strong><small>Bold display text</small></span></button>
-            <button className="text-preset subheading" onClick={() => void addText("subheading")}><Plus size={17} /><span><strong>Add a subheading</strong><small>Supporting emphasis</small></span></button>
-            <button className="text-preset body" onClick={() => void addText("body")}><Plus size={17} /><span><strong>Add body text</strong><small>Readable paragraphs and captions</small></span></button>
-          </div>
-          <div className="panel-section hint-card"><strong>Edit where you work</strong><p>Double-click text on the canvas to type in place, or use the Inspector for precise typography.</p></div>
-        </>
+        <TypeStudioPanel
+          text={selectedObject?.kind === "text" ? selectedObject : null}
+          assets={fontAssets}
+          loading={fontLoading}
+          addText={addText}
+          chooseFont={chooseFont}
+          uploadFont={() => fontInput.current?.click()}
+          update={updateTextStyleProperty}
+          toggleStyle={toggleTextStyle}
+        />
       );
     }
     if (activeTool === "Shapes") {
@@ -3470,6 +3641,7 @@ function Editor({
       <aside className="toolrail" aria-label="Creative tools">
         <Tool icon={<MousePointer2 />} label="Select" active={activeTool === "Select"} onClick={() => setActiveTool("Select")} />
         <Tool icon={<ImagePlus />} label="Images" active={activeTool === "Images"} onClick={() => setActiveTool("Images")} />
+        <Tool icon={<SlidersHorizontal />} label="Photo" active={activeTool === "Photo"} onClick={() => setActiveTool("Photo")} />
         <Tool icon={<Frame />} label="Studio" active={activeTool === "Studio"} onClick={() => setActiveTool("Studio")} />
         <Tool icon={<Type />} label="Text" active={activeTool === "Text"} onClick={() => setActiveTool("Text")} />
         <Tool icon={<Shapes />} label="Shapes" active={activeTool === "Shapes"} onClick={() => setActiveTool("Shapes")} />
@@ -3571,19 +3743,7 @@ function Editor({
             {selectedObject.kind === "text" && (
               <>
                 <label className="inspector-field"><span>Text <small>Double-click on canvas to edit in place</small></span><textarea key={`${selectedObject.id}-text-${selectedObject.text}`} defaultValue={selectedObject.text} rows={4} onBlur={(event) => updateSelectedText(event.target.value)} /></label>
-                <div className="typography-controls">
-                  <FontPicker value={selectedObject.fontFamily} assets={fontAssets} loading={fontLoading} onChoose={chooseFont} onUpload={() => fontInput.current?.click()} />
-                  <label className="control-slider"><span>Size <small>{Math.round(selectedObject.fontSize)} px</small></span><input key={`${selectedObject.id}-font-size`} type="range" min="12" max="220" defaultValue={selectedObject.fontSize} onChange={(event) => updateTextProperty({ fontSize: Number(event.target.value) }, "Text size changed", false)} onPointerUp={() => commitCanvas("Text size changed")} onKeyUp={() => commitCanvas("Text size changed")} /></label>
-                  <div className="text-button-row" aria-label="Text style and alignment">
-                    <button title="Bold" aria-label="Bold" className={selectedObject.fontStyle.includes("bold") ? "active" : ""} onClick={() => toggleTextStyle("bold")}><Bold size={15} /></button>
-                    <button title="Italic" aria-label="Italic" className={selectedObject.fontStyle.includes("italic") ? "active" : ""} onClick={() => toggleTextStyle("italic")}><Italic size={15} /></button>
-                    {(["left", "center", "right"] as const).map((align) => {
-                      const Icon = align === "left" ? AlignLeft : align === "center" ? AlignCenter : AlignRight;
-                      return <button title={`Align ${align}`} aria-label={`Align ${align}`} className={selectedObject.align === align ? "active" : ""} key={align} onClick={() => updateTextProperty({ align }, "Text aligned")}><Icon size={16} /></button>;
-                    })}
-                  </div>
-                  <label className="control-slider"><span>Line height <small>{selectedObject.lineHeight.toFixed(2)}</small></span><input key={`${selectedObject.id}-line-height`} type="range" min="0.7" max="2" step="0.05" defaultValue={selectedObject.lineHeight} onChange={(event) => updateTextProperty({ lineHeight: Number(event.target.value) }, "Line height changed", false)} onPointerUp={() => commitCanvas("Line height changed")} onKeyUp={() => commitCanvas("Line height changed")} /></label>
-                </div>
+                <button className="open-photo-lab-button" onClick={() => setActiveTool("Text")} title="Open fonts, spacing, outline, gradient, case, and curve controls"><Type size={17} /><span><strong>Open Type Studio</strong><small>{selectedObject.fontFamily} · {Math.round(selectedObject.fontSize)} px</small></span></button>
               </>
             )}
             {selectedObject.kind !== "image" && !(selectedObject.kind === "shape" && (selectedObject.shape === "blur" || selectedObject.shape === "redact")) && (
@@ -3601,20 +3761,7 @@ function Editor({
             {selectedObject.kind === "image" && (
               <>
                 <button className="replace-image-button" onClick={() => replaceImageInput.current?.click()} title="Replace this image while keeping its layout and Studio styling"><Replace size={15} /><span><strong>Replace image</strong><small>Keep layout and presentation</small></span></button>
-                <PhotoInspector
-                  image={selectedObject}
-                  applyPreset={applyPhotoPreset}
-                  updateAdjustments={updateImageAdjustments}
-                  applyCrop={applyCropAspect}
-                  openCrop={() => setCropEditorOpen(true)}
-                  openMask={() => setMaskEditorOpen(true)}
-                  openRegionEdit={() => setRegionEditorOpen(true)}
-                  rotate={rotateSelectedImage}
-                  flip={flipSelectedImage}
-                  reset={resetPhotoEdits}
-                  source={selectedAssetSource}
-                  precisionAvailable={Boolean(selectedAsset)}
-                />
+                <button className="open-photo-lab-button" onClick={() => setActiveTool("Photo")} title="Open crop, resize, color, retouch, mask, and warp controls"><SlidersHorizontal size={17} /><span><strong>Open Photo Lab</strong><small>{selectedAsset ? `${selectedAsset.width} × ${selectedAsset.height} px source` : "Edit the source image"}</small></span></button>
               </>
             )}
             <label className="inspector-field shape-select"><span>Blend mode <small>Combine with layers below</small></span><select value={selectedObject.blendMode ?? "source-over"} onChange={(event) => setBlendMode(event.target.value as (typeof BLEND_MODES)[number])}>{BLEND_MODES.map((mode) => <option key={mode} value={mode}>{mode === "source-over" ? "Normal" : mode.replaceAll("-", " ")}</option>)}</select></label>
@@ -3647,6 +3794,7 @@ function Editor({
       </aside>
       <footer className="product-footer">
         <a href={window.location.protocol === "chrome-extension:" ? "https://labs.wiplash.ai/glassware/" : "./index.html"} title="Back to the GlassWare landing page">GlassWare home</a>
+        <a href="./pricing.html" title="View Glassware plans and pricing">Pricing</a>
         <a href="https://labs.wiplash.ai/" target="_blank" rel="noreferrer" title="Visit Wiplash Labs">Wiplash Labs</a>
         <a href="https://wiplash.ai/" target="_blank" rel="noreferrer" title="Visit Wiplash.ai">Produced by Wiplash.ai</a>
         <a href="./privacy.html" target="_blank" rel="noreferrer" title="Read the GlassWare privacy policy">Privacy</a>
@@ -3676,6 +3824,13 @@ function Editor({
           crop={selectedObject.crop}
           onApply={applyPreciseCrop}
           onClose={() => setCropEditorOpen(false)}
+        />
+      )}
+      {resizeEditorOpen && selectedObject?.kind === "image" && selectedAsset && (
+        <ResizeImageModal
+          asset={selectedAsset}
+          onApply={resampleSelectedImage}
+          onClose={() => setResizeEditorOpen(false)}
         />
       )}
       {maskEditorOpen && selectedObject?.kind === "image" && selectedAsset && (
@@ -4087,6 +4242,65 @@ function ExportModal({
   );
 }
 
+function ResizeImageModal({
+  asset,
+  onApply,
+  onClose,
+}: {
+  asset: StoredAsset;
+  onApply: (width: number, height: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const aspect = asset.width / asset.height;
+  const [width, setWidth] = useState(asset.width);
+  const [height, setHeight] = useState(asset.height);
+  const [locked, setLocked] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const megapixels = width * height / 1_000_000;
+
+  function changeWidth(value: number) {
+    const next = Math.min(16384, Math.max(1, Math.round(value || 1)));
+    setWidth(next);
+    if (locked) setHeight(Math.min(16384, Math.max(1, Math.round(next / aspect))));
+  }
+
+  function changeHeight(value: number) {
+    const next = Math.min(16384, Math.max(1, Math.round(value || 1)));
+    setHeight(next);
+    if (locked) setWidth(Math.min(16384, Math.max(1, Math.round(next * aspect))));
+  }
+
+  async function submit() {
+    if (busy || (width === asset.width && height === asset.height)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onApply(width, height);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The image could not be resized.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop precision-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
+      <section className="resize-image-modal" role="dialog" aria-modal="true" aria-labelledby="resize-image-title">
+        <header><span><Scaling size={18} /> Resize image pixels</span><button disabled={busy} title="Close image resize" aria-label="Close image resize" onClick={onClose}>×</button></header>
+        <div className="resize-image-copy"><p>PHOTO LAB · SOURCE SIZE</p><h2 id="resize-image-title">Create an exact-size image copy</h2><span>GlassWare uses a high-quality local resampler and preserves the original asset for undo and recovery.</span></div>
+        <div className="resize-image-body">
+          <div className="resize-size-row"><label><span>Width</span><input aria-label="Image width" type="number" min="1" max="16384" value={width} onChange={(event) => changeWidth(Number(event.target.value))} /><small>px</small></label><span>×</span><label><span>Height</span><input aria-label="Image height" type="number" min="1" max="16384" value={height} onChange={(event) => changeHeight(Number(event.target.value))} /><small>px</small></label></div>
+          <label className="resize-lock"><input type="checkbox" checked={locked} onChange={(event) => setLocked(event.target.checked)} /><span><strong>Lock proportions</strong><small>Keep the original {asset.width}:{asset.height} aspect ratio</small></span></label>
+          <div className="resize-presets" aria-label="Resize presets"><button onClick={() => changeWidth(Math.round(asset.width * 0.5))}>50%</button><button onClick={() => changeWidth(asset.width)}>Original</button><button onClick={() => changeWidth(Math.round(asset.width * 2))}>200%</button></div>
+          <div className="resize-summary"><strong>{width.toLocaleString()} × {height.toLocaleString()} px</strong><span>{megapixels.toFixed(1)} megapixels · {width > asset.width || height > asset.height ? "Upscaling cannot invent original detail" : "Downsampled from the original"}</span></div>
+          {error && <button className="resize-error" onClick={() => setError("")}>{error}</button>}
+        </div>
+        <footer><button className="secondary" disabled={busy} onClick={onClose}>Cancel</button><button disabled={busy || (width === asset.width && height === asset.height)} onClick={() => void submit()}>{busy ? <><LoaderCircle className="spin" size={14} /> Resizing…</> : <><Scaling size={14} /> Create resized copy</>}</button></footer>
+      </section>
+    </div>
+  );
+}
+
 function CropEditor({
   asset,
   crop,
@@ -4269,31 +4483,118 @@ function ImageMaskEditor({
   );
 }
 
+function TypeStudioPanel({
+  text,
+  assets,
+  loading,
+  addText,
+  chooseFont,
+  uploadFont,
+  update,
+  toggleStyle,
+}: {
+  text: TextDesignNode | null;
+  assets: StoredFontAsset[];
+  loading: string | null;
+  addText: (preset: TextPreset) => Promise<void>;
+  chooseFont: (family: string) => Promise<void>;
+  uploadFont: () => void;
+  update: (patch: Partial<TextDesignNode>, summary: string, commit?: boolean) => void;
+  toggleStyle: (style: "bold" | "italic") => void;
+}) {
+  const gradient = cloneTextGradient(text?.gradient);
+  const curve = cloneTextCurve(text?.curve);
+  const weight = text?.fontWeight ?? (text?.fontStyle.includes("bold") ? 700 : 400);
+  return (
+    <>
+      <div className="panel-heading"><p>TYPE STUDIO</p><h1>Shape every letter</h1></div>
+      <div className="text-preset-list">
+        <button className="text-preset heading" onClick={() => void addText("heading")}><Plus size={17} /><span><strong>Add a heading</strong><small>Bold display text</small></span></button>
+        <button className="text-preset subheading" onClick={() => void addText("subheading")}><Plus size={17} /><span><strong>Add a subheading</strong><small>Supporting emphasis</small></span></button>
+        <button className="text-preset body" onClick={() => void addText("body")}><Plus size={17} /><span><strong>Add body text</strong><small>Readable paragraphs and captions</small></span></button>
+      </div>
+      {!text ? (
+        <div className="panel-section hint-card"><strong>Select text to style it</strong><p>Add a text layer above or choose one on the canvas. Double-click straight text to edit it in place.</p></div>
+      ) : (
+        <div className="type-studio-controls">
+          <label className="inspector-field type-studio-copy"><span>Words <small>{curve.mode === "none" ? "Double-click canvas to edit" : "Curved text stays editable here"}</small></span><textarea key={`${text.id}-${text.text}`} rows={3} defaultValue={text.text} onBlur={(event) => update({ text: event.target.value }, "Text edited")} /></label>
+          <div className="inspector-section-title"><span>Typeface</span><small>{GOOGLE_FONT_CHOICES.length}+ free families</small></div>
+          <FontPicker value={text.fontFamily} assets={assets} loading={loading} onChoose={chooseFont} onUpload={uploadFont} />
+          <div className="type-recipe-grid" aria-label="Typography recipes">
+            <button onClick={() => update({ fontWeight: 900, letterSpacing: -1.5, lineHeight: 0.92, textTransform: "uppercase", strokeWidth: 0 }, "Poster typography applied")}><strong>POSTER</strong><small>Dense display</small></button>
+            <button onClick={() => update({ fontWeight: 500, letterSpacing: 0.4, lineHeight: 1.08, textTransform: "none", strokeWidth: 0, gradient: { ...gradient, enabled: false } }, "Editorial typography applied")}><strong>Editorial</strong><small>Quiet contrast</small></button>
+            <button onClick={() => update({ fontWeight: 400, letterSpacing: 8, lineHeight: 1.2, textTransform: "uppercase", strokeWidth: 0 }, "Airy typography applied")}><strong>A I R Y</strong><small>Open tracking</small></button>
+          </div>
+          <AdjustmentSlider label="Weight" value={weight} min={100} max={900} step={100} display={weight} onChange={(value, commit) => update({ fontWeight: value }, "Font weight changed", commit)} />
+          <AdjustmentSlider label="Size" value={text.fontSize} min={8} max={400} step={1} display={`${Math.round(text.fontSize)} px`} onChange={(value, commit) => update({ fontSize: value }, "Text size changed", commit)} />
+          <AdjustmentSlider label="Letter spacing" value={text.letterSpacing ?? 0} min={-5} max={40} step={0.5} display={`${Number((text.letterSpacing ?? 0).toFixed(1))} px`} onChange={(value, commit) => update({ letterSpacing: value }, "Letter spacing changed", commit)} />
+          <AdjustmentSlider label="Line height" value={text.lineHeight} min={0.7} max={2.5} step={0.05} display={text.lineHeight.toFixed(2)} onChange={(value, commit) => update({ lineHeight: value }, "Line height changed", commit)} />
+          <div className="type-icon-row" aria-label="Typeface style and alignment">
+            <button title="Bold" aria-label="Bold" className={weight >= 600 ? "active" : ""} onClick={() => toggleStyle("bold")}><Bold size={16} /></button>
+            <button title="Italic" aria-label="Italic" className={text.fontStyle.includes("italic") ? "active" : ""} onClick={() => toggleStyle("italic")}><Italic size={16} /></button>
+            {(["left", "center", "right"] as const).map((align) => {
+              const Icon = align === "left" ? AlignLeft : align === "center" ? AlignCenter : AlignRight;
+              return <button title={`Align ${align}`} aria-label={`Align ${align}`} className={text.align === align ? "active" : ""} key={align} onClick={() => update({ align }, "Text aligned")}><Icon size={16} /></button>;
+            })}
+          </div>
+          <div className="inspector-section-title"><span>Case &amp; decoration</span><small>Editable text</small></div>
+          <div className="type-segmented three-up" aria-label="Text case">
+            {(["none", "uppercase", "lowercase"] as const).map((transform) => <button className={(text.textTransform ?? "none") === transform ? "active" : ""} key={transform} onClick={() => update({ textTransform: transform }, "Text case changed")}>{transform === "none" ? "As typed" : transform === "uppercase" ? "ABC" : "abc"}</button>)}
+          </div>
+          <div className="type-icon-row compact-row" aria-label="Text decoration">
+            <button title="No decoration" aria-label="No text decoration" className={(text.textDecoration ?? "none") === "none" ? "active" : ""} onClick={() => update({ textDecoration: "none" }, "Text decoration removed")}>Aa</button>
+            <button title="Underline" aria-label="Underline" className={text.textDecoration === "underline" ? "active" : ""} onClick={() => update({ textDecoration: "underline" }, "Text underlined")}><Underline size={16} /></button>
+            <button title="Strikethrough" aria-label="Strikethrough" className={text.textDecoration === "line-through" ? "active" : ""} onClick={() => update({ textDecoration: "line-through" }, "Text struck through")}><Strikethrough size={16} /></button>
+          </div>
+          <div className="inspector-section-title"><span>Color &amp; outline</span><small>Print-ready</small></div>
+          <ColorPicker label="Text color" value={text.fill} onPreview={(color) => update({ fill: color }, "Text color changed", false)} onCommit={(color) => update({ fill: color }, "Text color changed")} compact />
+          <AdjustmentSlider label="Outline" value={text.strokeWidth ?? 0} min={0} max={16} step={0.5} display={`${Number((text.strokeWidth ?? 0).toFixed(1))} px`} onChange={(value, commit) => update({ strokeWidth: value }, "Text outline changed", commit)} />
+          {(text.strokeWidth ?? 0) > 0 && <ColorPicker label="Outline color" value={text.stroke ?? "#111111"} onPreview={(color) => update({ stroke: color }, "Outline color changed", false)} onCommit={(color) => update({ stroke: color }, "Outline color changed")} compact />}
+          <div className="inspector-section-title"><span>Gradient</span><small>Across the letters</small></div>
+          <div className="type-segmented"><button className={!gradient.enabled ? "active" : ""} onClick={() => update({ gradient: { ...gradient, enabled: false } }, "Text gradient disabled")}>Solid</button><button className={gradient.enabled ? "active" : ""} onClick={() => update({ gradient: { ...gradient, enabled: true } }, "Text gradient enabled")}>Gradient</button></div>
+          {gradient.enabled && <div className="type-gradient-controls"><ColorPicker label="Gradient start" value={gradient.start} onPreview={(color) => update({ gradient: { ...gradient, start: color } }, "Gradient start changed", false)} onCommit={(color) => update({ gradient: { ...gradient, start: color } }, "Gradient start changed")} compact /><ColorPicker label="Gradient end" value={gradient.end} onPreview={(color) => update({ gradient: { ...gradient, end: color } }, "Gradient end changed", false)} onCommit={(color) => update({ gradient: { ...gradient, end: color } }, "Gradient end changed")} compact /><AdjustmentSlider label="Gradient angle" value={gradient.angle} min={0} max={360} step={1} display={`${Math.round(gradient.angle)}°`} onChange={(value, commit) => update({ gradient: { ...gradient, angle: value } }, "Gradient angle changed", commit)} /></div>}
+          <div className="inspector-section-title"><span>Curve</span><small>Live vector path</small></div>
+          <div className="type-segmented three-up"><button className={curve.mode === "none" ? "active" : ""} onClick={() => update({ curve: { ...curve, mode: "none" } }, "Text straightened")}>Straight</button><button className={curve.mode === "arc-up" ? "active" : ""} onClick={() => update({ curve: { ...curve, mode: "arc-up" } }, "Text curved upward")}>Arc up</button><button className={curve.mode === "arc-down" ? "active" : ""} onClick={() => update({ curve: { ...curve, mode: "arc-down" } }, "Text curved downward")}>Arc down</button></div>
+          {curve.mode !== "none" && <><AdjustmentSlider label="Curve amount" value={curve.amount} min={0.1} max={1} step={0.05} display={Math.round(curve.amount * 100)} onChange={(value, commit) => update({ curve: { ...curve, amount: value } }, "Text curve changed", commit)} /><p className="type-studio-note">Curved text follows a single editable path. Choose Straight to return to multiline on-canvas editing.</p></>}
+        </div>
+      )}
+    </>
+  );
+}
+
 function PhotoInspector({
   image,
   applyPreset,
   updateAdjustments,
+  updateWarp,
+  updateSkew,
   applyCrop,
   openCrop,
+  openResize,
   openMask,
   openRegionEdit,
   rotate,
   flip,
   reset,
   source,
+  sourceDimensions,
   precisionAvailable,
 }: {
   image: ImageDesignNode;
   applyPreset: (preset: PhotoPreset) => void;
   updateAdjustments: (patch: Partial<ImageAdjustments>, summary: string, commit?: boolean) => void;
+  updateWarp: (patch: Partial<ImageWarp>, summary: string, commit?: boolean) => void;
+  updateSkew: (axis: "skewX" | "skewY", value: number, commit?: boolean) => void;
   applyCrop: (aspect: number | null, label: string) => void;
   openCrop: () => void;
+  openResize: () => void;
   openMask: () => void;
   openRegionEdit: () => void;
   rotate: (direction: -1 | 1) => void;
   flip: (axis: "horizontal" | "vertical") => void;
   reset: () => void;
   source: AssetSource | null;
+  sourceDimensions: { width: number; height: number } | null;
   precisionAvailable: boolean;
 }) {
   return (
@@ -4304,16 +4605,28 @@ function PhotoInspector({
       </div>
       <div className="inspector-section-title"><span>Adjust</span><small>Saved with project</small></div>
       <AdjustmentSlider label="Brightness" value={image.adjustments.brightness} min={-1} max={1} step={0.05} display={Math.round(image.adjustments.brightness * 100)} onChange={(value, commit) => updateAdjustments({ brightness: value }, "Brightness changed", commit)} />
+      <AdjustmentSlider label="Exposure" value={image.adjustments.exposure} min={-2} max={2} step={0.05} display={Number(image.adjustments.exposure.toFixed(2))} onChange={(value, commit) => updateAdjustments({ exposure: value }, "Exposure changed", commit)} />
       <AdjustmentSlider label="Contrast" value={image.adjustments.contrast} min={-100} max={100} step={1} display={Math.round(image.adjustments.contrast)} onChange={(value, commit) => updateAdjustments({ contrast: value }, "Contrast changed", commit)} />
       <AdjustmentSlider label="Saturation" value={image.adjustments.saturation} min={-2} max={2} step={0.05} display={Math.round(image.adjustments.saturation * 100)} onChange={(value, commit) => updateAdjustments({ saturation: value }, "Saturation changed", commit)} />
+      <AdjustmentSlider label="Vibrance" value={image.adjustments.vibrance} min={-1} max={1} step={0.05} display={Math.round(image.adjustments.vibrance * 100)} onChange={(value, commit) => updateAdjustments({ vibrance: value }, "Vibrance changed", commit)} />
+      <AdjustmentSlider label="Highlights" value={image.adjustments.highlights} min={-1} max={1} step={0.05} display={Math.round(image.adjustments.highlights * 100)} onChange={(value, commit) => updateAdjustments({ highlights: value }, "Highlights changed", commit)} />
+      <AdjustmentSlider label="Shadows" value={image.adjustments.shadows} min={-1} max={1} step={0.05} display={Math.round(image.adjustments.shadows * 100)} onChange={(value, commit) => updateAdjustments({ shadows: value }, "Shadows changed", commit)} />
       <AdjustmentSlider label="Temperature" value={image.adjustments.temperature} min={-1} max={1} step={0.05} display={Math.round(image.adjustments.temperature * 100)} onChange={(value, commit) => updateAdjustments({ temperature: value }, "Temperature changed", commit)} />
       <AdjustmentSlider label="Tint" value={image.adjustments.tint} min={-1} max={1} step={0.05} display={Math.round(image.adjustments.tint * 100)} onChange={(value, commit) => updateAdjustments({ tint: value }, "Tint changed", commit)} />
+      <AdjustmentSlider label="Hue" value={image.adjustments.hue} min={-180} max={180} step={1} display={`${Math.round(image.adjustments.hue)}°`} onChange={(value, commit) => updateAdjustments({ hue: value }, "Hue changed", commit)} />
+      <AdjustmentSlider label="Fade" value={image.adjustments.fade} min={0} max={1} step={0.05} display={Math.round(image.adjustments.fade * 100)} onChange={(value, commit) => updateAdjustments({ fade: value }, "Fade changed", commit)} />
       <AdjustmentSlider label="Sharpen" value={image.adjustments.sharpen} min={0} max={1} step={0.05} display={Math.round(image.adjustments.sharpen * 100)} onChange={(value, commit) => updateAdjustments({ sharpen: value }, "Sharpen changed", commit)} />
       <AdjustmentSlider label="Vignette" value={image.adjustments.vignette} min={0} max={1} step={0.05} display={Math.round(image.adjustments.vignette * 100)} onChange={(value, commit) => updateAdjustments({ vignette: value }, "Vignette changed", commit)} />
       <AdjustmentSlider label="Blur" value={image.adjustments.blur} min={0} max={20} step={0.5} display={image.adjustments.blur} onChange={(value, commit) => updateAdjustments({ blur: value }, "Blur changed", commit)} />
       <div className="effect-toggles">
         <button className={image.adjustments.grayscale ? "active" : ""} onClick={() => updateAdjustments({ grayscale: !image.adjustments.grayscale }, "Grayscale toggled")}>B&amp;W</button>
         <button className={image.adjustments.sepia ? "active" : ""} onClick={() => updateAdjustments({ sepia: !image.adjustments.sepia }, "Sepia toggled")}>Sepia</button>
+      </div>
+      <div className="photo-advanced-group">
+        <label className="inspector-field shape-select"><span>Tone curve</span><select value={image.adjustments.curve} onChange={(event) => updateAdjustments({ curve: event.target.value as ImageAdjustments["curve"] }, "Tone curve changed")}><option value="linear">Linear</option><option value="soft-contrast">Soft contrast</option><option value="strong-contrast">Strong contrast</option><option value="matte">Matte</option><option value="soft-highlights">Soft highlights</option></select></label>
+        <AdjustmentSlider label="Black point" value={image.adjustments.levelsBlack} min={0} max={120} step={1} display={Math.round(image.adjustments.levelsBlack)} onChange={(value, commit) => updateAdjustments({ levelsBlack: Math.min(value, image.adjustments.levelsWhite - 1) }, "Black point changed", commit)} />
+        <AdjustmentSlider label="White point" value={image.adjustments.levelsWhite} min={135} max={255} step={1} display={Math.round(image.adjustments.levelsWhite)} onChange={(value, commit) => updateAdjustments({ levelsWhite: Math.max(value, image.adjustments.levelsBlack + 1) }, "White point changed", commit)} />
+        <AdjustmentSlider label="Midtone gamma" value={image.adjustments.levelsGamma} min={0.2} max={3} step={0.05} display={Number(image.adjustments.levelsGamma.toFixed(2))} onChange={(value, commit) => updateAdjustments({ levelsGamma: value }, "Midtone gamma changed", commit)} />
       </div>
       <div className="inspector-section-title"><span>Crop</span><small>Centered presets</small></div>
       <div className="crop-presets">
@@ -4323,12 +4636,20 @@ function PhotoInspector({
         <button onClick={() => applyCrop(16 / 9, "widescreen")}>16:9</button>
       </div>
       <button className="precision-edit-button" disabled={!precisionAvailable} onClick={openCrop} title="Move and resize the crop area precisely"><Crop size={15} /> Edit crop</button>
+      <button className="precision-edit-button secondary-precision-button" disabled={!precisionAvailable} onClick={openResize} title="Create a high-quality source copy at exact pixel dimensions"><Scaling size={15} /> Resize image pixels{sourceDimensions ? ` · ${sourceDimensions.width} × ${sourceDimensions.height}` : ""}</button>
       <div className="inspector-section-title"><span>Transform</span><small>Keep visual center</small></div>
       <div className="image-transform-buttons">
         <button title="Rotate 90 degrees counterclockwise" aria-label="Rotate image counterclockwise" onClick={() => rotate(-1)}><RotateCcw size={15} /></button>
         <button title="Rotate 90 degrees clockwise" aria-label="Rotate image clockwise" onClick={() => rotate(1)}><RotateCw size={15} /></button>
         <button title="Flip image horizontally" aria-label="Flip image horizontally" onClick={() => flip("horizontal")}><FlipHorizontal2 size={16} /></button>
         <button title="Flip image vertically" aria-label="Flip image vertically" onClick={() => flip("vertical")}><FlipVertical2 size={16} /></button>
+      </div>
+      <div className="photo-transform-controls">
+        <AdjustmentSlider label="Skew horizontal" value={image.skewX ?? 0} min={-35} max={35} step={1} display={`${Math.round(image.skewX ?? 0)}°`} onChange={(value, commit) => updateSkew("skewX", value, commit)} />
+        <AdjustmentSlider label="Skew vertical" value={image.skewY ?? 0} min={-35} max={35} step={1} display={`${Math.round(image.skewY ?? 0)}°`} onChange={(value, commit) => updateSkew("skewY", value, commit)} />
+        <label className="inspector-field shape-select"><span>Warp</span><select value={cloneImageWarp(image.warp).mode} onChange={(event) => updateWarp({ mode: event.target.value as ImageWarpMode }, "Image warp changed")}><option value="none">None</option><option value="perspective">Perspective</option><option value="bulge">Bulge</option><option value="pinch">Pinch</option><option value="wave">Wave</option></select></label>
+        {cloneImageWarp(image.warp).mode !== "none" && cloneImageWarp(image.warp).mode !== "perspective" && <AdjustmentSlider label="Warp amount" value={cloneImageWarp(image.warp).amount} min={0} max={1} step={0.05} display={Math.round(cloneImageWarp(image.warp).amount * 100)} onChange={(value, commit) => updateWarp({ amount: value }, "Image warp amount changed", commit)} />}
+        {cloneImageWarp(image.warp).mode === "perspective" && <><AdjustmentSlider label="Perspective horizontal" value={cloneImageWarp(image.warp).perspectiveX} min={-1} max={1} step={0.05} display={Math.round(cloneImageWarp(image.warp).perspectiveX * 100)} onChange={(value, commit) => updateWarp({ perspectiveX: value }, "Horizontal perspective changed", commit)} /><AdjustmentSlider label="Perspective vertical" value={cloneImageWarp(image.warp).perspectiveY} min={-1} max={1} step={0.05} display={Math.round(cloneImageWarp(image.warp).perspectiveY * 100)} onChange={(value, commit) => updateWarp({ perspectiveY: value }, "Vertical perspective changed", commit)} /></>}
       </div>
       <div className="inspector-section-title"><span>Mask</span><small>{image.mask.strokes.length ? `${image.mask.strokes.length} strokes` : "Non-destructive"}</small></div>
       <button className="precision-edit-button" disabled={!precisionAvailable} onClick={openMask} title="Hide or restore parts of this image with brushes"><Paintbrush size={15} /> Edit image mask</button>
@@ -4346,6 +4667,12 @@ function PhotoInspector({
         <div className="asset-source-receipt ai-edit-receipt">
           <span>AI REGION EDIT · {source.model}</span>
           <p>Derived from asset {source.parentAssetId.slice(0, 8)} with {source.connectionKind === "openai_api" ? "OpenAI API" : "ChatGPT / Codex"}. The edit prompt is not stored in the asset receipt.</p>
+        </div>
+      )}
+      {source?.provider === "glassware-resample" && (
+        <div className="asset-source-receipt">
+          <span>RESIZED SOURCE · {source.width} × {source.height}</span>
+          <p>High-quality local resample from {source.originalWidth} × {source.originalHeight}. The parent asset remains in this project for undo and recovery.</p>
         </div>
       )}
     </div>
@@ -4366,7 +4693,7 @@ function AdjustmentSlider({
   min: number;
   max: number;
   step: number;
-  display: number;
+  display: number | string;
   onChange: (value: number, commit: boolean) => void;
 }) {
   return (

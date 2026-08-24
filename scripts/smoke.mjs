@@ -517,6 +517,7 @@ try {
   await page.locator(".layer-row").filter({ hasText: "smoke.png" }).waitFor();
   assert(await page.locator(".layer-row").count() === 7, "Text, local uploads, and searched images should become durable layers");
   await page.locator(".layer-row").filter({ hasText: "smoke.png" }).locator(".layer-main").click();
+  await page.getByRole("button", { name: "Open Photo Lab" }).click();
   await page.getByRole("button", { name: "punch", exact: true }).click();
   await page.getByRole("button", { name: "1:1", exact: true }).click();
   const brightness = page.getByRole("slider", { name: "Brightness" });
@@ -637,8 +638,9 @@ try {
 
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await page.locator(".layer-row").filter({ hasText: "Headline" }).locator(".layer-main").click();
+  await page.getByRole("button", { name: "Open Type Studio" }).click();
   await page.getByLabel("Typeface", { exact: true }).click();
-  assert(await page.locator(".font-group").filter({ hasText: "Free Google Fonts" }).locator(".font-option").count() === 22, "The typeface picker should expose the curated Google Fonts catalog");
+  assert(await page.locator(".font-group").filter({ hasText: "Free Google Fonts" }).locator(".font-option").count() >= 80, "The typeface picker should expose the expanded open Google Fonts catalog");
   await page.screenshot({ path: "artifacts/font-picker-smoke.png", fullPage: true });
   await page.locator(".font-option").filter({ hasText: "Georgia" }).click();
   assert((await page.getByLabel("Typeface", { exact: true }).innerText()).includes("Georgia"), "The custom typeface picker should apply a system font");
@@ -656,6 +658,7 @@ try {
   assert(await page.locator(".layer-row").count() === 7, "Delete should remove the active layer");
 
   await page.locator(".layer-row").filter({ hasText: "smoke.png" }).locator(".layer-main").click();
+  await page.getByRole("button", { name: "Open Photo Lab" }).click();
   assert(await page.getByRole("slider", { name: "Contrast" }).inputValue() === "22", "Photo adjustments should survive reload");
   await page.getByRole("button", { name: "Studio", exact: true }).click();
   assert(await page.getByRole("slider", { name: "Radius" }).inputValue() === "18", "Image presentation should survive reload");
@@ -768,6 +771,7 @@ try {
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await page.locator(".layer-row").filter({ hasText: "smoke.png" }).locator(".layer-main").click();
   const layersBeforeRegionEdit = await page.locator(".layer-row").count();
+  await page.getByRole("button", { name: "Open Photo Lab" }).click();
   await page.getByRole("button", { name: "AI region edit" }).click();
   const regionDialog = page.getByRole("dialog", { name: "Paint what may change." });
   await regionDialog.waitFor();
@@ -785,8 +789,9 @@ try {
   assert(mockRegionEditRequests.length === 1, "A painted region should create exactly one protected image-edit job");
   assert(mockRegionEditRequests[0].sourceDataUrl.startsWith("data:image/png;base64,") && mockRegionEditRequests[0].maskDataUrl.startsWith("data:image/png;base64,"), "The region job should receive a bounded PNG crop and same-format alpha mask");
   assert(!Object.hasOwn(mockRegionEditRequests[0], "project"), "Region jobs should not receive the project bundle or unrelated layers");
-  assert(await page.locator(".layer-row").count() === layersBeforeRegionEdit + 1, "The default safe result should add the edited raster as a new layer");
   assert((await page.locator(".asset-source-receipt.ai-edit-receipt").innerText()).toLowerCase().includes("gpt-image-2"), "The edited layer should retain provider and model provenance without the prompt");
+  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  assert(await page.locator(".layer-row").count() === layersBeforeRegionEdit + 1, "The default safe result should add the edited raster as a new layer");
   await page.getByRole("button", { name: "Undo" }).click();
   assert(await page.locator(".layer-row").count() === layersBeforeRegionEdit, "Normal undo should remove the new region-edit layer");
   await page.getByRole("button", { name: "Redo" }).click();

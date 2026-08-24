@@ -63,9 +63,46 @@ describe("public JSON schemas", () => {
         feather: 6,
         strokes: [{ id: crypto.randomUUID(), mode: "hide", size: 0.08, points: [0.1, 0.1, 0.4, 0.4] }],
       },
+      warp: { mode: "perspective", amount: 0.5, perspectiveX: 0.2, perspectiveY: -0.15 },
     });
     const validate = validator().getSchema(projectSchema.$id)!;
     expect(validate(project), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it("accepts Type Studio styling emitted by the editor", () => {
+    const project = createProject("Type Studio schema");
+    project.objects = project.objects.map((object) => object.kind === "text" ? {
+      ...object,
+      skewX: 4,
+      fontWeight: 800,
+      letterSpacing: 2.5,
+      textDecoration: "underline" as const,
+      textTransform: "uppercase" as const,
+      stroke: "#ffffff",
+      strokeWidth: 2,
+      gradient: { enabled: true, start: "#ff5d42", end: "#7454d6", angle: 35 },
+      curve: { mode: "arc-up" as const, amount: 0.65 },
+    } : object);
+    const validate = validator().getSchema(projectSchema.$id)!;
+    expect(validate(project), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it("accepts resized-image provenance in portable bundles", () => {
+    const project = createProject("Resized image", false);
+    const validate = validator().compile(bundleSchema);
+    expect(validate({
+      schemaVersion: "glassware.bundle.v1",
+      exportedAt: new Date().toISOString(),
+      project,
+      assets: [{
+        id: crypto.randomUUID(), projectId: project.id, name: "resized.png", mimeType: "image/png",
+        size: 1, width: 600, height: 315, createdAt: new Date().toISOString(), dataUrl: "data:image/png;base64,AA==",
+        source: {
+          provider: "glassware-resample", parentAssetId: crypto.randomUUID(), originalWidth: 1200, originalHeight: 630,
+          width: 600, height: 315, createdAt: new Date().toISOString(),
+        },
+      }],
+    }), JSON.stringify(validate.errors)).toBe(true);
   });
 
   it("accepts every shape in the public element library", () => {

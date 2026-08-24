@@ -1,5 +1,9 @@
 const CAPTURE_KEY = "glassware.pendingCapture.v1";
 const EDITOR_TAB_KEY = "glassware.editorTab.v1";
+const BILLING_HOSTS = {
+  checkout: "checkout.stripe.com",
+  portal: "billing.stripe.com",
+};
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.contextMenus.removeAll().then(() => {
@@ -34,6 +38,24 @@ async function openEditor() {
 
 chrome.action.onClicked.addListener(() => {
   void openEditor();
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== "glassware.open-billing-page") return false;
+  void (async () => {
+    try {
+      const expectedHost = BILLING_HOSTS[message.purpose];
+      const url = new URL(message.url);
+      if (!expectedHost || url.protocol !== "https:" || url.hostname !== expectedHost || url.username || url.password) {
+        throw new Error("Glassware rejected an unsafe billing URL.");
+      }
+      const tab = await chrome.tabs.create({ url: url.toString(), active: true });
+      sendResponse({ ok: true, tabId: tab.id });
+    } catch (error) {
+      sendResponse({ ok: false, error: error instanceof Error ? error.message : "Billing page failed to open." });
+    }
+  })();
+  return true;
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {

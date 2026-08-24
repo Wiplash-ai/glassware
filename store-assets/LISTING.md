@@ -1,46 +1,87 @@
-# GlassWare browser-store listing
+# Glassware Image Editor — shared browser-store listing
 
 ## Name
 
-GlassWare — Capture and Edit Images
+Glassware Image Editor
 
 ## Short description
 
-Capture visible pages and turn them into editable, local-first artwork in GlassWare.
+Capture, crop, resize, retouch, layer, and export images in a private, local-first editor.
 
 ## Detailed description
 
-GlassWare brings the page already in front of you into a complete image editor.
+Glassware Image Editor turns the page in front of you—or an image from your
+computer—into editable artwork without forcing you into an account.
 
-- Open the full GlassWare editor directly from the toolbar.
-- Capture the visible browser page from the explicit “Capture page with GlassWare” context-menu action.
-- Edit text, shapes, images, layers, crops, masks, presentation frames, shadows, and region effects.
-- Search openly licensed Openverse images and load optional Google Fonts.
-- Save projects on this device and export PNG, JPEG, WebP, PDF, or portable GlassWare projects.
-- Sign in with Wiplash.ai and use account, cloud-storage, billing, or AI controls inside the packaged editor.
+Open the complete editor from the toolbar, or use the explicit **Capture page
+with Glassware** context-menu command to bring the visible browser page into a
+new local project.
 
-Normal capture, editing, saving, and export do not require an account. Captured website content remains in the browser's local extension storage and the local GlassWare project database unless the user explicitly chooses an online action.
+Inside Glassware you can:
 
-## Category
+- crop, resize, rotate, flip, skew, warp, mask, and retouch images in Photo Lab;
+- adjust exposure, contrast, color, tone curves, levels, sharpness, blur, and vignette without flattening the artwork;
+- add editable text, free fonts, gradients, outlines, spacing, decoration, and curved type in Type Studio;
+- combine images, text, shapes, annotations, blur regions, and secure redactions in a reorderable layer stack;
+- frame a selected image or the whole artwork with presentation, backdrop, corner, and shadow controls;
+- save locally and export PNG, JPEG, WebP, PDF, or a portable Glassware project.
 
-Productivity
+Local capture, editing, saving, and export work without an account. Captured
+content and artwork stay in browser storage unless you deliberately choose an
+online feature. Optional Wiplash.ai sign-in unlocks cloud sync, billing, and AI
+connections. AI features run only after the user connects ChatGPT/Codex or
+separately billed OpenAI API access.
 
-## URLs
+Optional cloud subscriptions are available through Stripe-hosted checkout.
+Designer is $7.99 monthly or $71.99 annually and includes 100 GB of private
+cloud storage. Director is $14.99 monthly per seat or $143.99 annually per seat
+and includes unlimited team storage. Stripe collects payment credentials on its
+hosted page; Glassware receives subscription, invoice, renewal, and payment
+status needed to provide the purchased plan. Glassware never receives or stores
+the full card number or card security code.
 
+Glassware does not sell user data, inject advertisements, monitor browsing in
+the background, or upload captures by default.
+
+## Shared metadata
+
+- Language: English (United States)
 - Homepage: https://labs.wiplash.ai/glassware/
 - Privacy policy: https://labs.wiplash.ai/glassware/privacy.html
 - Support: support@wiplash.ai
+- License: MIT
+
+## Single purpose
+
+Capture user-requested visible pages and local images into a full image editor
+for non-destructive photo adjustment, layered composition, and export.
 
 ## Permission explanations
 
-- `activeTab`: captures only the visible page after the user chooses the GlassWare context-menu command. It does not monitor browsing in the background.
-- `contextMenus`: adds the user-invoked “Capture page with GlassWare” command.
-- `identity`: opens the browser-owned Wiplash.ai sign-in window and returns only a one-time callback to GlassWare.
-- `storage`: holds one pending capture until import, local extension preferences, and—after sign-in—one revocable opaque GlassWare session token. It never stores an identity-provider or ChatGPT token.
-- Optional `auth.wiplash.ai`: requested only when the user chooses sign-in so the packaged editor can exchange its one-time PKCE code and use account features.
-- `api.openverse.org`: searches and imports user-selected openly licensed images with attribution details.
-- `fonts.googleapis.com` and `fonts.gstatic.com`: lets the user browse and load a selected Google Font into an artwork.
+- `activeTab`: captures only the visible page after the user chooses the
+  Glassware context-menu command. It does not monitor browsing in the background.
+- `contextMenus`: adds the user-invoked **Capture page with Glassware** command.
+- `identity`: opens the browser-owned Wiplash.ai sign-in window and returns only
+  a one-time callback to Glassware.
+- `storage`: holds one pending capture until import, local extension preferences,
+  and—after sign-in—one revocable opaque Glassware session token. It never stores
+  an identity-provider or ChatGPT token.
+- Optional `auth.wiplash.ai`: requested only when the user chooses sign-in so the
+  packaged editor can exchange its one-time PKCE code and use account features.
+- `api.openverse.org`: searches and imports user-selected openly licensed images
+  with attribution details.
+- `fonts.googleapis.com` and `fonts.gstatic.com`: lets the user browse, download,
+  and use a selected Google Font in an artwork.
 
 ## Data-use summary
 
-GlassWare handles captured website content, the source page URL, and user-created artwork locally to provide its disclosed capture-and-edit purpose. It does not sell user data, inject advertising, monitor browsing history, or transmit captures by default. When the user explicitly signs in, the packaged editor contacts the HTTPS GlassWare account service for account, cloud, billing, and AI features described in the linked privacy notice.
+Glassware handles captured website content, the source page URL, user-created
+artwork, and editing choices locally for its disclosed image-editing purpose. It
+does not sell user data, use it for advertising, or transmit captures by
+default. When a user explicitly signs in, the packaged editor contacts the
+HTTPS Glassware account service for the account, cloud, billing, and AI features
+described in the privacy notice. Those features can be disconnected, and the
+stored Glassware session can be removed whenever the user wants. If the user
+upgrades, Wiplash shares account and selected-plan details with Stripe and
+receives the resulting subscription and payment-status records. Stripe handles
+the payment credentials on its own hosted checkout and billing pages.

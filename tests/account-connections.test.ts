@@ -310,6 +310,87 @@ describe("account and AI connection clients", () => {
     expect(values.has(ACCOUNT_EXTENSION_STORAGE_KEY)).toBe(false);
   });
 
+  it("accepts Firefox-owned callbacks and requests its optional account data consent", async () => {
+    const redirectUri = "https://glassware-image-editor.extensions.allizom.org/";
+    const requested: Array<{ origins?: string[]; data_collection?: string[] }> = [];
+    const extensionChrome: ExtensionChromeLike = {
+      identity: {
+        getRedirectURL: () => redirectUri,
+        async launchWebAuthFlow() { throw new Error("not reached"); },
+      },
+      permissions: {
+        async contains() { return false; },
+        async request(value) { requested.push(value); return true; },
+      },
+      storage: {
+        local: {
+          async get() { return {}; },
+          async set() {},
+          async remove() {},
+        },
+      },
+    };
+    const client = createExtensionAccountServiceClient({
+      baseUrl: "https://auth.wiplash.ai/glassware",
+      chrome: extensionChrome,
+      fetch: async () => { throw new Error("authorization fixture complete"); },
+    });
+
+    await expect(client.startExtensionSignIn?.()).rejects.toThrow("authorization fixture complete");
+    expect(requested).toEqual([{
+      origins: ["https://auth.wiplash.ai/*"],
+      data_collection: [
+        "authenticationInfo",
+        "personallyIdentifyingInfo",
+        "financialAndPaymentInfo",
+        "personalCommunications",
+        "browsingActivity",
+        "websiteContent",
+      ],
+    }]);
+  });
+
+  it("opens trusted extension billing pages in a separate browser tab", async () => {
+    const messages: unknown[] = [];
+    const extensionChrome: ExtensionChromeLike = {
+      identity: {
+        getRedirectURL: () => "https://glassware-image-editor.extensions.allizom.org/",
+        async launchWebAuthFlow() { throw new Error("not reached"); },
+      },
+      permissions: {
+        async contains() { return true; },
+        async request() { return true; },
+      },
+      storage: {
+        local: {
+          async get() { return {}; },
+          async set() {},
+          async remove() {},
+        },
+      },
+      runtime: {
+        async sendMessage(message) {
+          messages.push(message);
+          return { ok: true, tabId: 42 };
+        },
+      },
+    };
+    const client = createExtensionAccountServiceClient({
+      baseUrl: "https://auth.wiplash.ai/glassware",
+      chrome: extensionChrome,
+      fetch: async () => { throw new Error("not reached"); },
+    });
+
+    expect(await client.requestExtensionBillingConsent?.()).toBe(true);
+    await client.openExtensionBillingPage?.("https://checkout.stripe.com/c/pay/cs_test_glassware", "checkout");
+    await client.openExtensionBillingPage?.("https://billing.stripe.com/p/session/test_glassware", "portal");
+    expect(messages).toEqual([
+      { type: "glassware.open-billing-page", purpose: "checkout", url: "https://checkout.stripe.com/c/pay/cs_test_glassware" },
+      { type: "glassware.open-billing-page", purpose: "portal", url: "https://billing.stripe.com/p/session/test_glassware" },
+    ]);
+    await expect(client.openExtensionBillingPage?.("https://example.com/phishing", "checkout")).rejects.toThrow("unsafe billing redirect");
+  });
+
   it("rejects unsafe service and authorization URLs", () => {
     expect(() => validateServiceBaseUrl("http://account.glassware.dev")).toThrow("HTTPS");
     expect(validateServiceBaseUrl("http://127.0.0.1:8789/")).toBe("http://127.0.0.1:8789");

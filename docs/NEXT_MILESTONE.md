@@ -43,7 +43,7 @@ inside the packaged editor and use the constrained HTTPS GlassWare service.
 4. Review every screenshot, listing claim, privacy disclosure, and support URL
    as a user and as a store reviewer.
 5. Merge the release pull request only after CI and the manual checklist pass.
-6. Tag the exact approved commit as `v1.0.0` and preserve its ZIP checksum.
+6. Tag the exact approved commit as `v1.0.1` and preserve its ZIP checksum.
 7. Submit that unchanged ZIP to Chrome Web Store, verify dashboard status, then
    repeat the live listing audit for Microsoft Edge Add-ons.
 

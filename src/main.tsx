@@ -4,8 +4,7 @@ import { LandingPage, PricingPage, PrivacyPage } from "./components/PublicPages"
 import "./styles.css";
 
 const entry = window.location.pathname.split("/").pop()?.toLowerCase() || "index.html";
-const extensionEditor = window.location.protocol === "chrome-extension:";
-const surface = extensionEditor || entry === "app.html"
+const surface = entry === "app.html"
   ? "editor"
   : entry === "pricing.html"
     ? "pricing"

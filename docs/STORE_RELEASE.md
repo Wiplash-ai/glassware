@@ -1,8 +1,8 @@
-# Chromium store release
+# Browser-store release
 
-GlassWare 1.0 is packaged as a Chromium Manifest V3 extension for the Chrome
-Web Store and Microsoft Edge Add-ons. This document is the reproducible release
-and manual-review checklist; it does not authorize a store upload.
+Glassware Image Editor 1.0.1 is packaged for Chrome, Microsoft Edge, Opera, and
+Firefox. This is the reproducible release and draft checklist; it does not
+authorize store submission or publication.
 
 ## Build and verify
 
@@ -10,46 +10,62 @@ Use Node.js 20 or newer from a clean checkout:
 
 ```bash
 npm ci
+npm run store:assets
 npm run verify
 npm run smoke:extension
 ```
 
-`npm run verify` runs unit tests, the production web build, extension packaging,
-and static package validation. `npm run smoke:extension` additionally launches
-an isolated local Chromium profile and therefore runs separately from CI.
+`npm run verify` runs unit tests, the production web build, browser-specific
+extension packaging, static package validation, and the full browser smoke.
+`npm run smoke:extension` separately launches an isolated Chromium profile and
+tests the packaged extension's toolbar, capture, native account/AI surfaces,
+local restore, and PNG export.
 
-Release outputs:
+## Release outputs
 
-- `artifacts/glassware-extension/` — unpacked package for local testing.
-- `artifacts/store/chromium/glassware-1.0.0-chromium.zip` — store upload.
-- `artifacts/store/chromium/glassware-1.0.0-chromium.zip.sha256` — checksum.
-- `artifacts/store/chromium/release.json` — version, size, file count, and hash.
+- `artifacts/glassware-extension/` — unpacked Chromium package for local testing.
+- `artifacts/glassware-extension-firefox/` — unpacked Firefox package.
+- `artifacts/store/chrome/glassware-1.0.1-chrome.zip`
+- `artifacts/store/edge/glassware-1.0.1-edge.zip`
+- `artifacts/store/opera/glassware-1.0.1-opera.zip`
+- `artifacts/store/firefox/glassware-1.0.1-firefox.zip`
+- `artifacts/store/firefox/glassware-1.0.1-firefox-source.zip`
 
-Do not rebuild between final approval and upload. Upload the exact reviewed ZIP
-and compare its SHA-256 digest with the release receipt.
+Each store directory contains a SHA-256 receipt and `release.json`. Chrome,
+Edge, and Opera use byte-identical reviewed Chromium packages. Firefox uses the
+same app with a stable add-on ID, event-page background fallback, Firefox 142
+minimum, and built-in optional data declarations.
+
+Do not rebuild between final approval and dashboard upload. Upload the exact
+reviewed ZIP and compare its SHA-256 digest with the release receipt.
 
 ## Manual BrowserOS checklist
 
-1. Confirm GlassWare is enabled at `chrome://extensions` and version is 1.0.0.
-2. Click the GlassWare toolbar icon and confirm the packaged editor opens or
-   focuses directly, with no popup.
-3. Open an ordinary HTTPS page, right-click, choose **Capture page with
-   GlassWare**, and confirm the packaged editor focuses with the screenshot
-   selected.
-4. Save, rename, reload, and reopen the project from **Files**.
-5. Export PNG and a portable GlassWare bundle; re-import the bundle.
-6. Click **Ask AI** and confirm the movable native chat opens without navigating
-   away from `app/app.html`.
-7. Click **Sign in**, complete the browser-owned Wiplash.ai window, and confirm
-   the native account and AI controls remain in the extension editor.
-8. Inspect the extension service worker console and editor console for errors.
+1. Confirm Glassware Image Editor is enabled at `chrome://extensions` and the version is 1.0.1.
+2. Click the toolbar icon and confirm the packaged editor opens or focuses directly, with no popup.
+3. Open an ordinary HTTPS page, right-click, choose **Capture page with GlassWare**, and confirm the packaged editor focuses with the screenshot selected.
+4. In Photo Lab, adjust tonal controls, apply a crop, and export the edited image.
+5. In Type Studio, edit text and confirm the layer remains editable.
+6. Save, rename, reload, and reopen the project from **Files**.
+7. Click **Ask AI** and confirm the movable native chat opens without navigating away from `app/app.html`.
+8. Click **Sign in** and confirm the browser-owned Wiplash.ai window starts only after the user action.
+9. Open **Pricing**, choose a signed-in upgrade, and confirm Stripe Checkout opens in a separate tab while the editor stays open. Verify the resulting entitlement in both the extension and web app.
+10. Inspect the extension background and editor consoles for errors.
 
-## Store materials
+## Draft-only store handling
 
-Listing copy, permission justifications, privacy disclosures, reviewer notes,
-screenshots, and promotional artwork live in [`../store-assets`](../store-assets).
-Review those files against the final package before each store submission.
+- Chrome: package upload creates an editable item draft. Fill Store listing,
+  Privacy, Distribution, and Test instructions; do not click **Submit for review**.
+  The WiplashAI publisher's 8/8 extension limit does not prevent creating or
+  editing drafts. Request a limit increase before submitting another extension
+  for review; do not alter another item to free a slot implicitly.
+- Edge: create the extension, upload the package, use **Save draft** on each
+  section; do not click **Publish**.
+- Firefox: do not start the AMO new-listing flow because **Submit Version** makes
+  the add-on available. Keep the package and local listing draft ready.
+- Opera: version 1.0.1 supports a pre-moderation state labeled **changes not
+  submitted for the moderators review**. Never click **Submit changes**. Capture
+  final 612x408 screenshots in Opera before moderation.
 
-Chrome and Edge submissions are separate live-state operations. After upload,
-record the dashboard status and review any store-generated warnings before
-claiming that GlassWare is published.
+Listing copy, reviewer notes, screenshots, promo assets, and current dashboard
+status live in `store-assets/`.
