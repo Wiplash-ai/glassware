@@ -10,7 +10,12 @@ publication authorization.
 - License: MIT
 - Service website: https://labs.wiplash.ai/glassware/
 - Support page: https://github.com/Wiplash-ai/glassware/issues
-- Public source: https://github.com/Wiplash-ai/glassware
+- Public source: https://github.com/Wiplash-ai/glassware/tree/v1.0.1
+- Moderator source: https://github.com/Wiplash-ai/glassware/tree/v1.0.1
+- Build instructions: Ubuntu 24.04, Node.js 20.19 or newer, and npm 10 or
+  newer; checkout `v1.0.1`, run `npm ci`, `npm run build:extension`, and
+  `npm run verify:extension`
+- License URL: https://github.com/Wiplash-ai/glassware/blob/v1.0.1/LICENSE
 - Privacy policy: https://labs.wiplash.ai/glassware/privacy.html
 - Package: `artifacts/store/opera/glassware-1.0.1-opera.zip`
 - Icon: `store-assets/opera-icon-64.png`
@@ -18,10 +23,9 @@ publication authorization.
 - Screenshots: all five 612x408 PNG files in
   `store-assets/opera-screenshots/`, in numeric order
 
-Opera's live portal requires screenshots captured in Opera itself. The current
-612x408 files were captured with Opera 135.0.5973.41 and visually checked at
-full size and 50% on August 24, 2026. They are ready for a later authorized
-dashboard upload; no screenshot was uploaded in this pass.
+Opera's live portal requires screenshots captured in Opera itself. The five
+612x408 files were captured with Opera 135.0.5973.41, visually checked at full
+size and 50%, and uploaded to the unsubmitted 1.0.1 draft on August 24, 2026.
 
 ## Description
 
@@ -39,5 +43,5 @@ annually. Checkout opens in a separate Stripe-hosted browser tab. Stripe handles
 payment credentials; Glassware receives only the account's subscription,
 invoice, transaction, renewal, and payment status needed to provide access.
 
-Before moderation, replace the generic source repository URL with the exact
-public release tag that reproduces version 1.0.1.
+The saved English translation includes the shared detailed description and a
+1.0.1 changelog. Auto-publishing and hidden distribution remain disabled.

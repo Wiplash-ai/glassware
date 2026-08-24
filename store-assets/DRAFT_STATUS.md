@@ -53,14 +53,12 @@ publication.
 - Saved: versions 1.0.0 and 1.0.1, with 1.0.1 as the current unsubmitted
   package; Appearance category; English summary, full Stripe-aware description
   and changelog; service/support/source links; reproducible build instructions;
-  MIT license URL; privacy-policy URL; 64x64 icon; and lowercase-Glassware
-  300x188 promotional image
+  exact public 1.0.1 source tag in both source fields; tagged MIT license URL;
+  privacy-policy URL; five Opera-native 612x408 screenshots; 64x64 icon; and
+  lowercase-Glassware 300x188 promotional image
 - Auto-publishing remains disabled and **Submit changes** was not clicked
-- Ready locally: all five 612x408 screenshot states were captured with Opera
-  135.0.5973.41 and visually checked at full size and 50%; they have not been
-  uploaded to the portal
+- All five 612x408 screenshot states were captured with Opera 135.0.5973.41,
+  visually checked at full size and 50%, and uploaded to the unsubmitted draft
 - Opera-native package QA passed for toolbar focus, capture import, local
   save/reload, PNG export, pricing and Stripe tab safety, native account/AI
   surfaces, and the browser-owned Wiplash OAuth handoff
-- Before moderation, point the moderator source field at the exact public 1.0.1
-  release tag rather than the repository root
