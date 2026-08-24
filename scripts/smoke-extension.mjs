@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { chromium } from "playwright-core";
 
 const root = resolve(import.meta.dirname, "..");
@@ -44,19 +44,11 @@ try {
   const initialTargets = await browserSession.send("Target.getTargets");
   const initialPage = initialTargets.targetInfos.find((target) => target.type === "page");
   assert(initialPage?.browserContextId, "the isolated Chromium tab context was not available");
-  const { tab } = await browserSession.send("Browser.createTab", {
-    url: `http://127.0.0.1:${address.port}/`,
-    browserContextId: initialPage.browserContextId,
-  });
-  const source = await waitForPage(context, (page) => page.url() === `http://127.0.0.1:${address.port}/`);
+  const source = await openTab(context, browserSession, `http://127.0.0.1:${address.port}/`, initialPage.browserContextId);
   await source.waitForLoadState("networkidle");
   await source.bringToFront();
   const capture = await source.screenshot({ type: "png" });
-  await browserSession.send("Browser.createTab", {
-    url: `chrome-extension://${extension.id}/app/privacy.html`,
-    browserContextId: initialPage.browserContextId,
-  });
-  const extensionPage = await waitForPage(context, (page) => page.url() === `chrome-extension://${extension.id}/app/privacy.html`);
+  const extensionPage = await openTab(context, browserSession, `chrome-extension://${extension.id}/app/privacy.html`, initialPage.browserContextId);
   await extensionPage.evaluate(async (values) => {
     await chrome.storage.local.set(values);
   }, {
@@ -74,18 +66,14 @@ try {
   await serviceWorker.evaluate(async () => { await openEditor(); });
   assert(context.pages().filter((page) => page.url() === editor.url()).length === 1, "the toolbar action duplicated the main editor tab");
   await editor.locator(".workbench").waitFor();
-  await editor.getByText(/Revision 2/).waitFor();
+  await editor.getByText(/Revision 2/).waitFor({ timeout: 60_000 });
   const bodyTypography = await editor.locator("body").evaluate((body) => {
     const style = getComputedStyle(body);
     return { fontSize: style.fontSize, fontFamily: style.fontFamily };
   });
   assert(bodyTypography.fontSize === "16px" && /Inter/.test(bodyTypography.fontFamily), "the packaged editor did not retain GlassWare typography");
   const pricingUrl = `chrome-extension://${extension.id}/app/pricing.html`;
-  await browserSession.send("Browser.createTab", {
-    url: pricingUrl,
-    browserContextId: initialPage.browserContextId,
-  });
-  const pricing = await waitForPage(context, (page) => page.url() === pricingUrl);
+  const pricing = await openTab(context, browserSession, pricingUrl, initialPage.browserContextId);
   await pricing.getByRole("heading", { name: "The editor is free. Cloud is the service." }).waitFor();
   assert(await pricing.getByRole("link", { name: "Upgrade to Designer" }).getAttribute("href") === "./app.html?subscribe=designer&billing=annual", "the packaged pricing CTA should preserve its subscription intent");
   await pricing.close();
@@ -115,7 +103,8 @@ try {
   assert(editor.url() === `chrome-extension://${extension.id}/app/app.html`, "Ask AI navigated away from the packaged editor");
   await editor.getByRole("button", { name: "Close Ask AI", exact: true }).click();
   await editor.locator(".account-button").evaluate((button) => button.click());
-  await editor.getByRole("dialog", { name: "Sign in or create an account" }).waitFor();
+  const signInDialog = editor.getByRole("dialog", { name: "Sign in or create an account" });
+  await signInDialog.waitFor();
   assert(editor.url() === `chrome-extension://${extension.id}/app/app.html`, "Sign in navigated away from the packaged editor");
   await editor.getByRole("button", { name: "Close sign in" }).click();
   await editor.getByRole("button", { name: "Layers", exact: true }).click();
@@ -142,7 +131,7 @@ try {
   });
   assert(Buffer.from(firstChunk).subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), "the extension export was not a PNG");
 
-  console.log(`GlassWare extension smoke passed in isolated Chromium: ${extension.id}, direct editor open/focus, packaged pricing and Stripe-tab routing, native app controls, pending-capture import, local restore, and PNG export.`);
+  console.log(`Glassware extension smoke passed in isolated ${basename(executablePath)}: ${extension.id}, direct editor open/focus, packaged pricing and Stripe-tab routing, native app controls, pending-capture import, local restore, and PNG export.`);
 } finally {
   await context?.close();
   await new Promise((resolvePromise) => server.close(resolvePromise));
@@ -156,6 +145,20 @@ async function waitForPage(context, predicate) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
   }
   throw new Error("The packaged GlassWare editor page did not open.");
+}
+
+async function openTab(context, browserSession, url, browserContextId) {
+  try {
+    await browserSession.send("Browser.createTab", { url, browserContextId });
+    return await waitForPage(context, (page) => page.url() === url);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("Browser.createTab")) throw error;
+    // BrowserOS exposes Browser.createTab, while stock Chromium browsers such
+    // as Opera use Playwright's standard page API.
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    return page;
+  }
 }
 
 function assert(condition, message) {

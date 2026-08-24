@@ -11,6 +11,7 @@
     "verify:extension": "node scripts/verify-extension-package.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:extension": "node scripts/smoke-extension.mjs",
+    "smoke:extension:auth": "node scripts/smoke-extension-auth-handoff.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "verify": "npm run test && npm run build:extension && npm run verify:extension && npm run smoke"

@@ -8,7 +8,8 @@ No file here authorizes submission or publication.
 - `REVIEWER_NOTES.md`: exact account-free certification path.
 - `source/`: original generated demo photograph, abstract promo backdrop, and provenance.
 - `screenshots/`: five actual 1280x800 Glassware UI screenshots made from one edited campaign project.
-- `opera-screenshots/`: 612x408 layout references for later recapture in Opera.
+- `opera-screenshots/`: five final 612x408 screenshots captured with Opera,
+  plus their browser/package/checksum receipt.
 - `promo/small-440x280.png`: required Chrome and optional Edge small tile.
 - `promo/marquee-1400x560.png`: optional Chrome and Edge marquee tile.
 - `promo/*.svg`: deterministic, editable tile layouts with exact first-party typography.
@@ -38,8 +39,10 @@ This runs a production build, generates all five 1280x800 screenshots, renders
 the exact 440x280 and 1400x560 promotional PNGs, creates Opera's 64x64 icon and
 300x188 promotional image, and creates 612x408 Opera screenshot references.
 
-Opera requires final screenshots to be captured in Opera itself. Treat the
-612x408 derivatives as shot-list references, not upload-ready Opera evidence.
+The checked-in 612x408 screenshots were rendered and captured with Opera
+135.0.5973.41 on August 24, 2026. Regeneration in another browser creates only
+shot-list references; do not replace these final files without another
+Opera-native capture and visual review.
 
 Before a dashboard upload, verify dimensions with `identify`, visually inspect
 the PNGs at original resolution and at 50%, then run `npm run verify`. Upload the

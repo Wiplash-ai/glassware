@@ -56,7 +56,11 @@ publication.
   MIT license URL; privacy-policy URL; 64x64 icon; and lowercase-Glassware
   300x188 promotional image
 - Auto-publishing remains disabled and **Submit changes** was not clicked
-- Remaining blocker: recapture the five screenshot states in Opera; the portal
-  explicitly warns that screenshots from another browser might be rejected
+- Ready locally: all five 612x408 screenshot states were captured with Opera
+  135.0.5973.41 and visually checked at full size and 50%; they have not been
+  uploaded to the portal
+- Opera-native package QA passed for toolbar focus, capture import, local
+  save/reload, PNG export, pricing and Stripe tab safety, native account/AI
+  surfaces, and the browser-owned Wiplash OAuth handoff
 - Before moderation, point the moderator source field at the exact public 1.0.1
   release tag rather than the repository root

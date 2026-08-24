@@ -21,6 +21,19 @@ extension packaging, static package validation, and the full browser smoke.
 tests the packaged extension's toolbar, capture, native account/AI surfaces,
 local restore, and PNG export.
 
+For an Opera-native release check, run both packaged smokes against the Opera
+executable:
+
+```bash
+GLASSWARE_EXTENSION_CHROME=/path/to/opera npm run smoke:extension
+GLASSWARE_EXTENSION_CHROME=/path/to/opera npm run smoke:extension:auth
+```
+
+The OAuth handoff smoke pre-grants the optional Wiplash account origin only in
+its disposable profile because headless browsers cannot answer browser-chrome
+permission prompts. It verifies Opera's browser-owned authorization target and
+does not complete or retain a user session.
+
 ## Release outputs
 
 - `artifacts/glassware-extension/` — unpacked Chromium package for local testing.
@@ -64,8 +77,9 @@ reviewed ZIP and compare its SHA-256 digest with the release receipt.
 - Firefox: do not start the AMO new-listing flow because **Submit Version** makes
   the add-on available. Keep the package and local listing draft ready.
 - Opera: version 1.0.1 supports a pre-moderation state labeled **changes not
-  submitted for the moderators review**. Never click **Submit changes**. Capture
-  final 612x408 screenshots in Opera before moderation.
+  submitted for the moderators review**. Never click **Submit changes**. The
+  final 612x408 screenshots were captured with Opera 135.0.5973.41 and visually
+  checked at full size and 50% on August 24, 2026.
 
 Listing copy, reviewer notes, screenshots, promo assets, and current dashboard
 status live in `store-assets/`.

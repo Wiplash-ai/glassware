@@ -15,12 +15,13 @@ publication authorization.
 - Package: `artifacts/store/opera/glassware-1.0.1-opera.zip`
 - Icon: `store-assets/opera-icon-64.png`
 - Promotional image: `store-assets/opera-promo-300x188.png`
-- Screenshot references: all five 612x408 PNG files in
+- Screenshots: all five 612x408 PNG files in
   `store-assets/opera-screenshots/`, in numeric order
 
 Opera's live portal requires screenshots captured in Opera itself. The current
-612x408 references must not be uploaded as release screenshots until they are
-re-captured in Opera and visually compared with these approved states.
+612x408 files were captured with Opera 135.0.5973.41 and visually checked at
+full size and 50% on August 24, 2026. They are ready for a later authorized
+dashboard upload; no screenshot was uploaded in this pass.
 
 ## Description
 
