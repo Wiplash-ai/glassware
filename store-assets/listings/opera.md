@@ -1,8 +1,7 @@
-# Opera Add-ons draft
+# Opera Add-ons submission
 
-Status: package 306241 is saved in the Opera developer portal with **changes not
-submitted for the moderators review**. Never click **Submit changes** without
-publication authorization.
+Status: version 1.0.1 for package 306241 was submitted on August 25, 2026 and is
+**Awaiting moderation**. Auto-publishing remains disabled.
 
 - Name: Glassware Image Editor
 - Summary: Capture, crop, resize, retouch, layer, and export images in a private, local-first editor.
@@ -20,12 +19,13 @@ publication authorization.
 - Package: `artifacts/store/opera/glassware-1.0.1-opera.zip`
 - Icon: `store-assets/opera-icon-64.png`
 - Promotional image: `store-assets/opera-promo-300x188.png`
-- Screenshots: all five 612x408 PNG files in
-  `store-assets/opera-screenshots/`, in numeric order
+- Screenshots: Opera permits three. The submitted set uses
+  `01-photo-lab-tonal-editing.png`, `03-type-studio-editable-overlay.png`, and
+  `05-editable-layer-stack.png` from `store-assets/opera-screenshots/`
 
-Opera's live portal requires screenshots captured in Opera itself. The five
-612x408 files were captured with Opera 135.0.5973.41, visually checked at full
-size and 50%, and uploaded to the unsubmitted 1.0.1 draft on August 24, 2026.
+Opera's live portal requires screenshots captured in Opera itself. The source
+612x408 set was captured with Opera 135.0.5973.41 and visually checked at full
+size and 50%. The three strongest screenshots were submitted with 1.0.1.
 
 ## Description
 
@@ -43,5 +43,5 @@ annually. Checkout opens in a separate Stripe-hosted browser tab. Stripe handles
 payment credentials; Glassware receives only the account's subscription,
 invoice, transaction, renewal, and payment status needed to provide access.
 
-The saved English translation includes the shared detailed description and a
-1.0.1 changelog. Auto-publishing and hidden distribution remain disabled.
+The submitted English translation includes the shared detailed description and
+a 1.0.1 changelog. Auto-publishing and hidden distribution remain disabled.

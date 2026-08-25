@@ -1,7 +1,8 @@
-# Chrome Web Store draft
+# Chrome Web Store submission
 
-Status: dashboard draft saved as item `lmnefkhhhedffbfbbchkgkgopeanoicg`;
-do not click **Submit for review**.
+Status: version 1.0.1 for item `lmnefkhhhedffbfbbchkgkgopeanoicg`
+was submitted on August 25, 2026 and is **Pending review**. Automatic publishing
+after approval is disabled.
 
 - Name: Glassware Image Editor
 - Manifest short description: Capture, crop, resize, retouch, layer, and export images in a private, local-first editor.

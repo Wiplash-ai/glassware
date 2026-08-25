@@ -1,8 +1,7 @@
-# Firefox Add-ons listing draft
+# Firefox Add-ons submission
 
-Status: local draft only. AMO's current new-listing flow publishes after
-**Submit Version**, so no dashboard item should be started until publication is
-authorized.
+Status: version 1.0.1 was submitted on August 25, 2026 and is **Awaiting Review**.
+The reviewer-source archive and product-page media were submitted with it.
 
 - Name: Glassware Image Editor
 - Add-on URL slug: glassware-image-editor
@@ -18,6 +17,8 @@ authorized.
 - Reviewer source: `artifacts/store/firefox/glassware-1.0.1-firefox-source.zip`
 - Screenshots: all five PNG files in `store-assets/screenshots/`, in numeric order
 - Authentication callback: `https://glassware-image-editor.extensions.allizom.org/`
+- Add-on ID: `glassware-image-editor@wiplash.ai`
+- Automated validation: no errors and three warnings
 
 ## Description
 

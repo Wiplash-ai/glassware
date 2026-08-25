@@ -1,8 +1,8 @@
-# Microsoft Edge Add-ons draft
+# Microsoft Edge Add-ons submission
 
-Status: Partner Center draft saved as product
-`79bad74e-4689-46da-973a-bf38df6f2947`, Store ID `0RDCKC2PNF4P`, and CRX ID
-`gddagamcmfnoeppfonecapgpdjejjojj`; do not click **Publish**.
+Status: version 1.0.1 is **In review**. It was submitted on August 25, 2026 as
+product `79bad74e-4689-46da-973a-bf38df6f2947`, Store ID `0RDCKC2PNF4P`, and
+CRX ID `gddagamcmfnoeppfonecapgpdjejjojj`.
 
 - Extension name: Glassware Image Editor
 - Short description: Capture, crop, resize, retouch, layer, and export images in a private, local-first editor.
