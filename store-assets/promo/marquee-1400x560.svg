@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">Glassware Image Editor</title>
+  <desc id="desc">A bold stained-glass field with the Glassware mark and image-editor wordmark.</desc>
+  <image href="../source/stained-glass-promo-backdrop.png" x="0" y="0" width="1400" height="560" preserveAspectRatio="xMidYMid slice" />
+  <path d="M0 0H720L925 560H0Z" fill="#fffaf2" fill-opacity=".94" />
+  <path d="M0 0H740" stroke="#111" stroke-width="18" />
+  <path d="M0 560H925" stroke="#111" stroke-width="18" />
+  <image href="../../public/glassware-mark.svg" x="104" y="155" width="176" height="176" />
+  <g fill="#111" font-family="Arial, Helvetica, sans-serif">
+    <text x="326" y="245" font-size="90" font-weight="800" letter-spacing="-5">Glassware</text>
+    <text x="332" y="294" font-size="23" font-weight="800" letter-spacing="7">IMAGE EDITOR</text>
+    <path d="M332 326H724" stroke="#111" stroke-width="3" />
+    <text x="332" y="369" font-size="24" font-weight="600">Crop · retouch · resize · layer</text>
+  </g>
+</svg>
